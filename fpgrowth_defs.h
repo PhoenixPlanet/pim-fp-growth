@@ -1,19 +1,19 @@
 #ifndef FPGROWTH_DEFS_H
 #define FPGROWTH_DEFS_H
 
-#define NULL 0
-
 /**
  * @file fpgrowth_defs.h
  * @brief Definitions and structures for the FP-Growth algorithm.
  */
 
+#define MAX_ITEMS 1024
+
+#define NULL 0
 
 typedef struct Item {
     int item_id;
     int count;
 } Item;
-
 
 typedef struct Node {
     Item item;
@@ -23,7 +23,7 @@ typedef struct Node {
 } Node;
 
 typedef struct HeaderTableEntry {
-    Item item;
+    Item* item;
     Node** node_link;
     HeaderTableEntry* next;
 } HeaderTableEntry;
@@ -50,6 +50,7 @@ void push_header_table(HeaderTable* table, HeaderTableEntry* entry) {
         table->tail->next = entry;
         table->tail = entry;
     }
+    entry->next = NULL;
     table->size++;
 }
 
@@ -91,6 +92,7 @@ void push_pattern_base_list(PatternBaseList* list, PatternBase* base) {
         list->tail->next = base;
         list->tail = base;
     }
+    base->next = NULL;
     list->size++;
 }
 
@@ -106,7 +108,7 @@ void free_pattern_base_list(PatternBaseList* list) {
 }
 
 typedef struct FrequentItem {
-    int* itemsets;
+    Item* item;
     FrequentItem* next;
 } FrequentItem;
 
@@ -124,13 +126,31 @@ FrequentItemSet* create_frequent_item_set() {
     return set;
 }
 
-void push_frequent_item_set(FrequentItemSet* set, FrequentItem* item) {
-    if (set->head == NULL) {
-        set->head = item;
-        set->tail = item;
+void push_frequent_item_set(FrequentItemSet* set, FrequentItem* new_item) {
+    FrequentItem* current = set->head;
+    while (current != NULL && current->item->count < new_item->item->count) {
+        current = current->next;
+    }
+    if (current == NULL) {
+        if (set->tail == NULL) {
+            set->head = new_item;
+            set->tail = new_item;
+        } else {
+            set->tail->next = new_item;
+            set->tail = new_item;
+        }
     } else {
-        set->tail->next = item;
-        set->tail = item;
+        if (current == set->head) {
+            new_item->next = set->head;
+            set->head = new_item;
+        } else {
+            FrequentItem* prev = set->head;
+            while (prev->next != current) {
+                prev = prev->next;
+            }
+            prev->next = new_item;
+            new_item->next = current;
+        }
     }
     set->size++;
 }
@@ -139,7 +159,7 @@ void free_frequent_item_set(FrequentItemSet* set) {
     FrequentItem* current = set->head;
     while (current != NULL) {
         FrequentItem* next = current->next;
-        free(current->itemsets);
+        free(current->item);
         free(current);
         current = next;
     }

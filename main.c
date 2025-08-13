@@ -1,5 +1,6 @@
-#include"fpgrowth.h"
-#include"db.h"
+#include "fpgrowth_defs.h"
+#include "fpgrowth.h"
+#include "db.h"
 
 #include <stdio.h>
 
@@ -8,26 +9,14 @@
 
 int main() {
 
-    FILE* file = fopen(DB_PATH, "r");
-    if (!file) {
-        fprintf(stderr, "Could not open file: %s\n", DB_PATH);
-        return 1;
-    }
-    
+    open_db(DB_PATH);
 
-    FPTree fp_tree(MIN_SUPPORT, &db);
-    fp_tree.build_tree();
+    build_tree(DB_PATH, MIN_SUPPORT);
 
-    std::vector<std::vector<int>> frequent_itemsets;
-    std::vector<int> prefix_path;
-    fp_tree.mine_pattern(prefix_path, frequent_itemsets);
-
-    for (const auto& itemset : frequent_itemsets) {
-        for (int item : itemset) {
-            std::cout << item << " ";
-        }
-        std::cout << std::endl;
-    }
+    FrequentItemSet* frequent_itemsets = create_frequent_item_set();
+    int* prefix_path = (int*)malloc(sizeof(int) * 1024);
+    int prefix_length = 0;
+    mine_pattern(prefix_path, frequent_itemsets);
 
     return 0;
 }
