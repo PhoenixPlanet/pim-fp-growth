@@ -10,13 +10,15 @@
 int main() {
 
     open_db(DB_PATH);
+    init_FPTree(MIN_SUPPORT);
 
-    build_tree(DB_PATH, MIN_SUPPORT);
+    HeaderTable* header_table = headerTable();
 
-    FrequentItemSet* frequent_itemsets = create_frequent_item_set();
-    int* prefix_path = (int*)malloc(sizeof(int) * 1024);
-    int prefix_length = 0;
-    mine_pattern(prefix_path, frequent_itemsets);
+    build_tree(MIN_SUPPORT);
+
+    FrequentItemSet* frequent_itemsets = frequentItemSet();
+    Vector* prefix_path = vector();
+    mine_pattern(header_table, prefix_path, frequent_itemsets, MIN_SUPPORT);
 
     return 0;
 }

@@ -7,30 +7,28 @@
 #include "fpgrowth_defs.h"
 
 
-void build_tree(FILE* stream, int min_support) {
-    FrequentItemSet* frequent_items = scan_for_frequent_items(stream, min_support);
+void build_tree(int min_support) {
+    ItemCountList* item_count = itemCountList();
+    FrequentItemSet* frequent_items = scan_for_frequent_items(item_count, min_support);
 
-    HeaderTable* header_table = create_header_table();
+    HeaderTable* header_table = headerTable();
     for (FrequentItem* item = frequent_items->head; item != NULL; item) {
-        HeaderTableEntry* entry = (HeaderTableEntry*)malloc(sizeof(HeaderTableEntry));
-        entry->item = item->item;
-        entry->node_link = NULL; // Initialize node link to NULL
-        entry->next = NULL;
-        push_header_table(header_table, entry);
+        HeaderTableEntry* entry = headerTableEntry(item->item.item_id, item->item.count);
+        SORTED_INSERT(HeaderTableEntry, header_table, item_id, entry);
     }
     while (1) {
-        int* items = filtered_items(stream, min_support);
+        Vector* items = filtered_items(item_count, min_support);
         if (items == NULL) break;
-        if (items[0] == -1) {
-            free(items);
+        if (items->size == 0) {
+            free_vector(items);
             continue; // Skip empty transactions
         }
         Node* current_node = root;
 
-        for(int item = 0; items[item] != -1; item++) {
+        for(Scalar* item = items->head; item != NULL; item = item->next) {
             int found = 0;
             for (Node* child = current_node->first_child; child != NULL; child = child->next_sibling) {
-                if (child->item.item_id == items[item]) {
+                if (child->item.item_id == item->value) {
                     child->item.count++;
                     current_node = child;
                     found = 1;
@@ -38,32 +36,29 @@ void build_tree(FILE* stream, int min_support) {
                 }
             }
             if (!found) {
-                Node* new_node = (Node*)malloc(sizeof(Node));
-                new_node->item.item_id = items[item];
-                new_node->item.count = 1;
-                new_node->parent = current_node;
-                new_node->first_child = NULL;
-                new_node->next_sibling = NULL;
+                Node* n = node(item->value, 1);
+                n->parent = current_node;
 
                 if (current_node->first_child == NULL) {
-                    current_node->first_child = new_node;
+                    current_node->first_child = n;
                 } else {
                     Node* sibling = current_node->first_child;
                     while (sibling->next_sibling != NULL) {
                         sibling = sibling->next_sibling;
                     }
-                    sibling->next_sibling = new_node;
+                    sibling->next_sibling = n;
                 }
 
                 // Add to header table
-                HeaderTableEntry* htb_entry = find_header_table_entry(header_table, items[item]);
+                HeaderTableEntry* htb_entry = find_header_table_entry(header_table, item->value);
                 if (htb_entry != NULL) {
-                    push_header_table(htb_entry, new_node);
+                    INSERT(htb_entry->node_link, nodeLink(n));
+                    htb_entry->frequency++;
+                    current_node = n;
                 } else {
-                    fprintf(stderr, "Error: Item not found in header table: %d\n", items[item]);
+                    fprintf(stderr, "Error: Item not found in header table: %d\n", item->value);
                 }
             }
         }
-        free(items);
     }
 }

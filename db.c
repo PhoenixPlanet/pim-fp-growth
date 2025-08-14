@@ -5,47 +5,41 @@
 #include "fpgrowth_defs.h"
 #include "db.h"
 
-FrequentItemSet* scan_for_frequent_items(FILE* stream, int min_support) {
+FrequentItemSet* scan_for_frequent_items(ItemCountList* item_count, int min_support) {
     char line[1024];
-    FrequentItemSet* set = create_frequent_item_set();
+    item_count = itemCountList();
+    FrequentItemSet* set = frequentItemSet();
 
     while(fscanf(stream, "%[^\n]\n", line) == 1) {
         char* token = strtok(line, " ");
         while(token != NULL) {
             int item = atoi(token);
-            item_count[item]++;
+            incr_item_count(item_count, item, 1);
             token = strtok(NULL, " ");
         }
     }
 
     for (int i = 0; i < 1024; i++) {
-        if (item_count[i] >= min_support) {
-            FrequentItem* item = (FrequentItem*)malloc(sizeof(FrequentItem));
-            item->item->item_id = i;
-            item->item->count = item_count[i];
-            push_frequent_item_set(set, item);
+        int c = find_item_count(item_count, i);
+        if (c >= min_support) {
+            FrequentItem* fi = frequentItem(i, c);
+            INSERT(set, fi);
         }
     }
 
     return set;
 }
 
-int* filtered_items(FILE* stream, int min_support) {
+Vector* filtered_items(ItemCountList* item_count, int min_support) {
     char line[1024];
-    SortedItemList* items = create_sorted_item_list();
+    Vector* items = vector();
     while (fscanf(stream, "%[^\n]\n", line) == 1) {
         char* token = strtok(line, " ");
         int item = atoi(token);
-        if (find_item_count(item) && item_count[item] >= min_support) {
-            push_sorted_item_list(items, item);
+        if (find_item_count(item_count, item) >= min_support) {
+            Scalar* s = scalar(item);
+            INSERT(items, s);
         }
     }
-
-    int* result = (int*)malloc(items->size * sizeof(int));
-    SortedItemEntry* current = items->head;
-    for (int i = 0; (i < items->size) && (current); i++, current = current->next) {
-        result[i] = current->item;
-    }
-    free_sorted_item_list(items);
-    return result;
+    return items;
 }
