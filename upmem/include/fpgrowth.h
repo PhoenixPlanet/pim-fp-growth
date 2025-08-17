@@ -1,23 +1,44 @@
 #ifndef FPGROWTH_H
 #define FPGROWTH_H
 
-#include "fpgrowth_defs.h"
+#include <vector>
+#include <list>
+
 #include "db.h"
 
-Node* root;
-HeaderTableEntry* _header_table;
+struct Node {
+    int item;
+    int count;
+    Node* parent;
+    std::list<Node*> child;
 
-void init_FPTree(int min_support) {
-    root = node(-1, 0); // Create root node with item_id -1 and count 0
-    _header_table = headerTable(); // Initialize header table
-    mem_count = 0; // Initialize memory count
-}
+    Node(int item, int count, Node* parent): item(item), count(count), parent(parent) {}
+};
 
-void build_tree(int min_support);
-void build_conditional_tree(PatternBaseList* pattern_base, int min_support);
-void mine_pattern(HeaderTable* header_table, Vector* prefix_path,
-    FrequentItemSet* frequent_itemsets, int min_support);
-void delete_tree();
+struct HeaderTableEntry {
+    int item;
+    int frequency;
+    std::list<Node*> node_link;
+};
+
+class FPTree {
+public:
+    FPTree(int min_support, Database* db): _root(new Node(-1, 0, nullptr)), _min_support(min_support), _db(db) {}
+    FPTree(int min_support): _root(new Node(-1, 0, nullptr)), _min_support(min_support), _db(nullptr) {}
+
+    void build_tree();
+    void build_conditional_tree(std::vector<std::pair<std::vector<int>, int>>& pattern_base, int min_support);
+    void mine_pattern(std::vector<int>& prefix_path, std::vector<std::vector<int>>& frequent_itemsets);
+    void delete_tree();
+
+private:
+    Node* _root;
+    Database* _db;
+    int _min_support;
+    std::vector<HeaderTableEntry> _header_table;
+
+    void delete_tree(Node* node);
+};
 
 int mem_count;
 
