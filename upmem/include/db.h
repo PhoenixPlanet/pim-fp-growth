@@ -13,7 +13,7 @@ void open_db(const char* filename) {
         exit(EXIT_FAILURE);
     }
 }
-FrequentItemSet* scan_for_frequent_items(ItemCountList* item_count, int min_support);
+FrequentItemSet* scan_for_frequent_items(int min_support);
 Vector* filtered_items(ItemCountList* item_count, int min_support);
 
 #endif // DB_H

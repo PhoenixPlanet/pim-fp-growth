@@ -10,24 +10,12 @@
 #include "fpgrowth.h"
 #include "fpgrowth_defs.h"
 
-#define DPU_DB_FILTER "transfer_dpu"
-#define DPU_COND_FPTREE "cond_fptree"
-
-#ifndef NR_DPUS
-#define NR_DPUS 1
-#endif
-
-#ifndef DATA_SIZE
-#define DATA_SIZE 1024
-#endif
-
 #define DB_PATH "data.txt"
 #define MIN_SUPPORT 3
 
 // #define COPY_TO
 // #define BROADCAST
 // #define XFER
-
 
 int main(int argc, char *argv[]) {
     struct dpu_set_t dpu_set, dpu;
