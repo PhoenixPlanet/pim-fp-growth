@@ -9,14 +9,12 @@
 
 #define MAX_ELEMS (MRAM_AVAILABLE / sizeof(int32_t))
 
-using namespace dpu;
-
 void Database::seek_to_start() {
     _file.clear();
     _file.seekg(0, std::ios::beg);
 }
 
-void Database::dpu_count_items(DpuSet& system, std::vector<std::vector<int32_t>>& buffers) {
+void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int32_t>>& buffers) {
     uint32_t nr_of_dpus = system.dpus().size();
     std::vector<std::vector<uint32_t>> counts(nr_of_dpus, std::vector<uint32_t>(1, 0));
     std::vector<std::vector<uint32_t>> results(nr_of_dpus, std::vector<uint32_t>(NR_DB_ITEMS * NR_TASKLETS));
@@ -57,7 +55,7 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
     std::vector<std::pair<int, int>> frequent_items;
 
     try {
-        auto system = DpuSet::allocate(NR_DPUS);
+        auto system = dpu::DpuSet::allocate(NR_DPUS);
         system.load(DPU_DB_COUNT_ITEM);
         
         uint32_t nr_of_dpus = system.dpus().size();
@@ -75,7 +73,11 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
                         buffers[i].clear();
                     }
                 }
+                buffers[buffer_idx++].push_back(item);
             }
+        }
+        if (buffers[0].size() > 0) {
+            dpu_count_items(system, buffers);
         }
 
         for (int i = 0; i < NR_DB_ITEMS; i++) {
@@ -83,7 +85,7 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
                 frequent_items.push_back({i, _item_count[i]});
             }
         }
-    } catch (const DpuError & e) {
+    } catch (const dpu::DpuError & e) {
         std::cerr << e.what() << std::endl;
     }
 

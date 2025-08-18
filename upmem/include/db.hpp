@@ -9,6 +9,7 @@
 #include <vector>
 #include <utility>
 #include <optional>
+#include <dpu>
 
 class Database {
 public:
@@ -29,7 +30,7 @@ private:
     int _min_support;
     std::vector<int> _item_count;
 
-    void dpu_count_items(DpuSet& system, std::vector<std::vector<int32_t>>& buffers);
+    void dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int32_t>>& buffers);
 };
 
 #endif
