@@ -29,13 +29,13 @@ void FPTree::build_tree() {
     }
 
     _db->seek_to_start();
-    while (true) {
-        auto items = _db->filtered_items();
-        
-        if (!items) break;
+    std::deque<std::vector<int>> items_list = _db->filtered_items();
+    while (items_list.size() > 0) {
+        std::vector<int> items = items_list.front();
+        items_list.pop_front();
 
         Node* current_node = _root;
-        for (int item : *items) {
+        for (int item : items) {
             bool found = false;
             for (Node* child : current_node->child) {
                 if (child->item == item) {

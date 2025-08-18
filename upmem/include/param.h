@@ -10,6 +10,7 @@
 #endif
 
 #define DPU_DB_COUNT_ITEM "db_count_item"
+#define DPU_DB_FILTER_ITEM "db_filter_item"
 #define DPU_DB_FILTER "db_filter"
 #define DPU_COND_FPTREE "cond_fptree"
 
@@ -23,5 +24,7 @@
 #ifndef NR_DB_ITEMS
 #define NR_DB_ITEMS 1024
 #endif
+
+#define NR_THREADS 4
 
 #endif

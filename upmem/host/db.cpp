@@ -4,10 +4,40 @@
 #include <vector>
 #include <cstdint>
 #include <dpu>
+#include <thread>
 
 #include "param.h"
 
 #define MAX_ELEMS (MRAM_AVAILABLE / sizeof(int32_t))
+
+std::streampos find_next_line(std::ifstream& file, std::streampos start) {
+    file.seekg(start);
+    char ch;
+    while(file.get(ch)) {
+        if(ch == '\n') {
+            return file.tellg();
+        }
+    }
+    return file.tellg();
+}
+
+std::vector<std::pair<std::streampos, std::streampos>> divide_file(std::ifstream& file, int num_parts) {
+    std::vector<std::pair<std::streampos, std::streampos>> parts;
+    file.seekg(0, std::ios::end);
+    std::streampos end = file.tellg();
+    file.seekg(0, std::ios::beg);
+    
+    std::streampos part_size = end / num_parts;
+    std::streampos start = 0;
+
+    for (int i = 0; i < num_parts; ++i) {
+        std::streampos next_start = find_next_line(file, start + part_size);
+        parts.emplace_back(start, next_start);
+        start = next_start;
+    }
+
+    return parts;
+}
 
 void Database::seek_to_start() {
     _file.clear();
@@ -46,61 +76,97 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
 }
 
 std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_support) {
-    std::string line;
     _min_support = min_support;
 
-    seek_to_start();
     _item_count.resize(NR_DB_ITEMS, 0);
 
     std::vector<std::pair<int, int>> frequent_items;
+    std::vector<std::pair<std::streampos, std::streampos>> parts = divide_file(_file, NR_THREADS);
+    std::vector<std::thread> threads;
+    for (int i = 0; i < NR_THREADS; i++) {
+        threads.emplace_back([this, i, &parts, &frequent_items]() {
+            _file.seekg(parts[i].first);
+            try {
+                auto system = dpu::DpuSet::allocate(NR_DPUS);
+                system.load(DPU_DB_COUNT_ITEM);
+                
+                uint32_t nr_of_dpus = system.dpus().size();
+                std::vector<std::vector<int32_t>> buffers(nr_of_dpus, std::vector<int32_t>());
 
-    try {
-        auto system = dpu::DpuSet::allocate(NR_DPUS);
-        system.load(DPU_DB_COUNT_ITEM);
-        
-        uint32_t nr_of_dpus = system.dpus().size();
-        std::vector<std::vector<int32_t>> buffers(nr_of_dpus, std::vector<int32_t>());
-
-        int buffer_idx = 0;
-        while (std::getline(_file, line)) {
-            std::istringstream iss(line);
-            int item;
-            while (iss >> item) {
-                if (buffers[buffer_idx].size() >= MAX_ELEMS) {
-                    dpu_count_items(system, buffers);
-                    buffer_idx = 0;
-                    for (int i = 0; i < nr_of_dpus; i++) {
-                        buffers[i].clear();
+                int buffer_idx = 0;
+                std::string line;
+                while (_file.tellg() < parts[i].second && std::getline(_file, line)) {
+                    std::istringstream iss(line);
+                    int item;
+                    while (iss >> item) {
+                        if (buffers[buffer_idx].size() >= MAX_ELEMS) {
+                            dpu_count_items(system, buffers);
+                            buffer_idx = 0;
+                            for (int i = 0; i < nr_of_dpus; i++) {
+                                buffers[i].clear();
+                            }
+                        }
+                        buffers[buffer_idx++].push_back(item);
                     }
                 }
-                buffers[buffer_idx++].push_back(item);
-            }
-        }
-        if (buffers[0].size() > 0) {
-            dpu_count_items(system, buffers);
-        }
+                if (buffers[0].size() > 0) {
+                    dpu_count_items(system, buffers);
+                }
 
-        for (int i = 0; i < NR_DB_ITEMS; i++) {
-            if (_item_count[i] >= min_support) {
-                frequent_items.push_back({i, _item_count[i]});
+                for (int i = 0; i < NR_DB_ITEMS; i++) {
+                    if (_item_count[i] >= _min_support) {
+                        std::lock_guard<std::mutex> lock(mutex);
+                        frequent_items.push_back({i, _item_count[i]});
+                    }
+                }
+            } catch (const dpu::DpuError & e) {
+                std::cerr << e.what() << std::endl;
             }
         }
-    } catch (const dpu::DpuError & e) {
-        std::cerr << e.what() << std::endl;
+        
+    );
     }
-
+    for (auto& thread : threads) {
+        thread.join();
+    }
     return frequent_items;
 }
 
-std::optional<std::vector<int>> Database::filtered_items() {
-    std::string line;
+std::deque<std::vector<int>> Database::filtered_items() {
+
+    std::vector<std::deque<std::vector<int>>> all_results(NR_THREADS);
+    std::vector<std::pair<std::streampos, std::streampos>> parts = divide_file(_file, NR_THREADS);
+    std::vector<std::thread> threads;
+
+    for (int i = 0; i <NR_THREADS; i++) {
+        threads.emplace_back([this, i, &parts, &all_results]() {
+            _file.seekg(parts[i].first);
+            std::string line;
+            while (std::getline(_file, line)) {
+                std::istringstream iss(line);
+                std::vector<int> items;
+                int item;
+                while (iss >> item) {
+                    if (_item_count.find(item) != _item_count.end() && _item_count[item] >= _min_support) {
+                        items.push_back(item);
+                    }
+                }
+                if (!items.empty()) {
+                    std::sort(items.begin(), items.end(), [this](int a, int b) {
+                        return _item_count[a] > _item_count[b];
+                    });
+                    all_results[i].push_back(items);
+                }
+            }
+        });
+    }
 
     if (std::getline(_file, line)) {
         std::istringstream iss(line);
         std::vector<int> items;
         int item;
         while (iss >> item) {
-            if (item >= 0 && item < NR_DB_ITEMS && _item_count[item] >= _min_support) {
+            if (_item_count.find(item) != _item_count.end() && _item_count[item] >= _min_support) {
                 items.push_back(item);
             }
         }
