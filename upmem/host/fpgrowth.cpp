@@ -100,28 +100,37 @@ void FPTree::build_tree() {
 }
 
 void FPTree::build_fp_array() {
-    std::vector<FPArrayEntry> fp_array;
     std::map<int32_t, int> item_idx_table;
+    _fp_array.clear();
 
     Node* target_leaf = _leaf_head;
     while (target_leaf) {
         Node* current = target_leaf;
-        fp_array.push_back({current->item, -1, current->count});
+        _fp_array.push_back({current->item, -1, current->count, 0});
         while (current) {
             Node* parent = current->parent;
-            FPArrayEntry& last_entry = fp_array.back();
+            FPArrayEntry& last_entry = _fp_array.back();
             if (item_idx_table.find(parent->item) != item_idx_table.end()) {
                 last_entry.parent_index = item_idx_table[parent->item];
                 break;
             }
 
-            item_idx_table[parent->item] = fp_array.size();
+            item_idx_table[parent->item] = _fp_array.size();
             last_entry.parent_index = item_idx_table[parent->item];
 
-            fp_array.push_back({parent->item, -1, 0});
+            _fp_array.push_back({parent->item, -1, parent->count, 0});
             current = parent;
         }
         target_leaf = target_leaf->next_leaf;
+    }
+}
+
+void FPTree::build_k1_ele_pos() {
+    _k1_ele_pos.clear();
+
+    for (int i = 0; i < _fp_array.size(); ++i) {
+        const FPArrayEntry& entry = _fp_array[i];
+        _k1_ele_pos.push_back({entry.item, i, entry.support, 0});
     }
 }
 

@@ -27,6 +27,14 @@ struct FPArrayEntry {
     int32_t item;
     int32_t parent_index;
     int32_t support;
+    int32_t padding;
+};
+
+struct ElePosEntry {
+    int32_t item;
+    int32_t pos;
+    int32_t support;
+    int32_t padding;
 };
 
 class FPTree {
@@ -36,6 +44,7 @@ public:
 
     void build_tree();
     void build_fp_array();
+    void build_k1_ele_pos();
     void build_conditional_tree(std::vector<std::pair<std::vector<int>, int>>& pattern_base, int min_support);
     void mine_pattern(std::vector<int>& prefix_path, std::vector<std::vector<int>>& frequent_itemsets);
     void delete_tree();
@@ -46,6 +55,8 @@ private:
     Database* _db;
     int _min_support;
     std::vector<HeaderTableEntry> _header_table;
+    std::vector<FPArrayEntry> _fp_array;
+    std::vector<ElePosEntry> _k1_ele_pos;
 
     void delete_tree(Node* node);
 };
