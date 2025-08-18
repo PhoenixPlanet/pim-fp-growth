@@ -1,5 +1,7 @@
 #include "fpgrowth.h"
 #include <algorithm>
+#include <vector>
+#include <map>
 
 void print_tree(Node* node, int depth = 0) {
     for (int i = 0; i < depth; ++i) std::cout << "  ";
@@ -99,13 +101,27 @@ void FPTree::build_tree() {
 
 void FPTree::build_fp_array() {
     std::vector<FPArrayEntry> fp_array;
+    std::map<int32_t, int> item_idx_table;
 
     Node* target_leaf = _leaf_head;
     while (target_leaf) {
         Node* current = target_leaf;
-        while (current == _root) {
+        fp_array.push_back({current->item, -1, current->count});
+        while (current) {
+            Node* parent = current->parent;
+            FPArrayEntry& last_entry = fp_array.back();
+            if (item_idx_table.find(parent->item) != item_idx_table.end()) {
+                last_entry.parent_index = item_idx_table[parent->item];
+                break;
+            }
 
+            item_idx_table[parent->item] = fp_array.size();
+            last_entry.parent_index = item_idx_table[parent->item];
+
+            fp_array.push_back({parent->item, -1, 0});
+            current = parent;
         }
+        target_leaf = target_leaf->next_leaf;
     }
 }
 
