@@ -29,6 +29,7 @@ void FPTree::build_tree() {
     }
 
     _db->seek_to_start();
+    _leaf_head = nullptr;
     while (true) {
         auto items = _db->filtered_items();
         
@@ -47,6 +48,40 @@ void FPTree::build_tree() {
             }
             if (!found) {
                 Node* new_node = new Node(item, 1, current_node);
+                
+                if (current_node != _root && current_node->child.empty()) {
+                    Node* prev = current_node->prev_leaf;
+                    Node* next = current_node->next_leaf;
+
+                    if (_leaf_head == current_node) {
+                        _leaf_head = current_node->next_leaf;
+                        if (_leaf_head) {
+                            _leaf_head->prev_leaf = nullptr;
+                        }
+                    }
+
+                    if (prev) {
+                        prev->next_leaf = next;
+                    }
+                    if (next) {
+                        next->prev_leaf = prev;
+                    }
+
+                    current_node->next_leaf = nullptr;
+                    current_node->prev_leaf = nullptr;
+                }
+
+                if (_leaf_head == nullptr) {
+                    _leaf_head = new_node;
+                    new_node->next_leaf = nullptr;
+                    new_node->prev_leaf = nullptr;
+                } else {
+                    new_node->prev_leaf = nullptr;
+                    new_node->next_leaf = _leaf_head;
+                    _leaf_head->prev_leaf = new_node;
+                    _leaf_head = new_node;
+                }
+
                 current_node->child.push_back(new_node);
                 current_node = current_node->child.back();
                 auto htb_entry = std::find_if(_header_table.begin(), _header_table.end(), [&item](const HeaderTableEntry& entry) {
@@ -58,6 +93,18 @@ void FPTree::build_tree() {
                     std::cerr << "Error: Item not found in header table: " << item << std::endl;
                 }
             }
+        }
+    }
+}
+
+void FPTree::build_fp_array() {
+    std::vector<FPArrayEntry> fp_array;
+
+    Node* target_leaf = _leaf_head;
+    while (target_leaf) {
+        Node* current = target_leaf;
+        while (current == _root) {
+
         }
     }
 }
