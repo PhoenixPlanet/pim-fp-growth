@@ -142,12 +142,12 @@ std::deque<std::vector<int>> Database::filtered_items() {
         threads.emplace_back([this, i, &parts, &all_results]() {
             _file.seekg(parts[i].first);
             std::string line;
-            while (std::getline(_file, line)) {
+            while (_file.tellg() < parts[i].second && std::getline(_file, line)) {
                 std::istringstream iss(line);
                 std::vector<int> items;
                 int item;
                 while (iss >> item) {
-                    if (_item_count.find(item) != _item_count.end() && _item_count[item] >= _min_support) {
+                    if (_item_count[item] >= _min_support) {
                         items.push_back(item);
                     }
                 }
@@ -160,23 +160,12 @@ std::deque<std::vector<int>> Database::filtered_items() {
             }
         });
     }
-
-    if (std::getline(_file, line)) {
-        std::istringstream iss(line);
-        std::vector<int> items;
-        int item;
-        while (iss >> item) {
-            if (_item_count.find(item) != _item_count.end() && _item_count[item] >= _min_support) {
-                items.push_back(item);
-            }
-        }
-
-        std::sort(items.begin(), items.end(), [this](int a, int b) {
-            return _item_count[a] > _item_count[b];
-        });
-
-        return items;
-    } else {
-        return std::nullopt;
+    for (auto& thread : threads) {
+        thread.join();
     }
+    std::deque<std::vector<int>> results;
+    for (const auto& result : all_results) {
+        results.insert(results.end(), result.begin(), result.end());
+    }
+    return results;
 }
