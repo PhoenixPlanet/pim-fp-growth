@@ -11,12 +11,14 @@
 
 #define DPU_DB_COUNT_ITEM "db_count_item"
 #define DPU_DB_FILTER_ITEM "db_filter_item"
-#define DPU_DB_FILTER "db_filter"
-#define DPU_COND_FPTREE "cond_fptree"
+#define DPU_DB_FILTER "mine_candidates"
 
 #define BLOCK_SIZE (1024)
 #define MRAM_MAX (64ull << 20)
-#define MRAM_RESERVED (1ull  << 20)
+#define MRAM_RESERVED (1ull << 20)
+#define MRAM_FP_ARRAY_SZ (16ull << 20)
+#define MRAM_FP_ELEPOS_SIZE (1ull << 19)
+#define CANDIATE_PER_ELEPOS (32)
 
 #define ALIGN_DOWN(BYTES, ALIGN) ((BYTES) - ((BYTES) % (ALIGN)))
 #define MRAM_AVAILABLE ALIGN_DOWN(MRAM_MAX - MRAM_RESERVED, 8)
