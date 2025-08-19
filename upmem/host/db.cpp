@@ -55,7 +55,7 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
                 buffers[0].push_back(0); // Ensure even number of elements for DPU processing
             }
         } else {
-            int padding = counts[i][0] - counts[0][0];
+            int padding = buffers[0].size() - buffers[i].size();
             if (padding > 0) {
                 buffers[i].resize(buffers[i].size() + padding, 0); // Pad with zeros
             } 
@@ -74,7 +74,7 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
         uint32_t acc = 0;
         for (int d = 0; d < nr_of_dpus; d++) {
             for (int t = 0; t < NR_TASKLETS; t++) {
-                acc += results[d][NR_TASKLETS * t + i];
+                acc += results[d][NR_DB_ITEMS * t + i];
             }
         }
         _item_count[i] += acc;
@@ -109,7 +109,8 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
                         buffers[i].clear();
                     }
                 }
-                buffers[buffer_idx++].push_back(item);
+                buffers[buffer_idx].push_back(item);
+                buffer_idx = (buffer_idx + 1) % nr_of_dpus;
             }
         }
         if (buffers[0].size() > 0) {
@@ -118,14 +119,12 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
 
         for (int i = 0; i < NR_DB_ITEMS; i++) {
             if (_item_count[i] >= _min_support) {
-                std::lock_guard<std::mutex> lock(mutex);
                 frequent_items.push_back({i, _item_count[i]});
             }
         }
     } catch (const dpu::DpuError & e) {
         std::cerr << e.what() << std::endl;
     }
-        
     
     return frequent_items;
 }

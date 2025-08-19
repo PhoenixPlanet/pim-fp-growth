@@ -172,6 +172,10 @@ std::unordered_map<uint64_t, CandidateEntry> FPTree::dpu_mine_candidates(dpu::Dp
     std::vector<std::vector<uint32_t>> counts(nr_of_dpus, std::vector<uint32_t>(1, 0));
     for (int i = 0; i < nr_of_dpus; ++i) {
         counts[i][0] = distributed[i].size();
+        int padding = distributed[0].size() - distributed[i].size();
+        if (padding > 0) {
+            distributed[i].resize(distributed[i].size() + padding, {0, 0, 0, 0}); // Pad with zeros
+        }
     }
 
     system.copy("k_elepos_size", counts);
