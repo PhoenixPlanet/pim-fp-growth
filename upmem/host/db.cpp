@@ -87,54 +87,46 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
     _item_count.resize(NR_DB_ITEMS, 0);
 
     std::vector<std::pair<int, int>> frequent_items;
-    std::vector<std::pair<std::streampos, std::streampos>> parts = divide_file(_file, NR_THREADS);
-    std::vector<std::thread> threads;
-    for (int i = 0; i < NR_THREADS; i++) {
-        threads.emplace_back([this, i, &parts, &frequent_items]() {
-            _file.seekg(parts[i].first);
-            try {
-                auto system = dpu::DpuSet::allocate(NR_DPUS);
-                system.load(DPU_DB_COUNT_ITEM);
-                
-                uint32_t nr_of_dpus = system.dpus().size();
-                std::vector<std::vector<int32_t>> buffers(nr_of_dpus, std::vector<int32_t>());
+    seek_to_start();
+    
+    try {
+        auto system = dpu::DpuSet::allocate(NR_DPUS);
+        system.load(DPU_DB_COUNT_ITEM);
+        
+        uint32_t nr_of_dpus = system.dpus().size();
+        std::vector<std::vector<int32_t>> buffers(nr_of_dpus, std::vector<int32_t>());
 
-                int buffer_idx = 0;
-                std::string line;
-                while (_file.tellg() < parts[i].second && std::getline(_file, line)) {
-                    std::istringstream iss(line);
-                    int item;
-                    while (iss >> item) {
-                        if (buffers[buffer_idx].size() >= MAX_ELEMS) {
-                            dpu_count_items(system, buffers);
-                            buffer_idx = 0;
-                            for (int i = 0; i < nr_of_dpus; i++) {
-                                buffers[i].clear();
-                            }
-                        }
-                        buffers[buffer_idx++].push_back(item);
-                    }
-                }
-                if (buffers[0].size() > 0) {
+        int buffer_idx = 0;
+        std::string line;
+        while (std::getline(_file, line)) {
+            std::istringstream iss(line);
+            int item;
+            while (iss >> item) {
+                if (buffers[buffer_idx].size() >= MAX_ELEMS) {
                     dpu_count_items(system, buffers);
-                }
-
-                for (int i = 0; i < NR_DB_ITEMS; i++) {
-                    if (_item_count[i] >= _min_support) {
-                        std::lock_guard<std::mutex> lock(mutex);
-                        frequent_items.push_back({i, _item_count[i]});
+                    buffer_idx = 0;
+                    for (int i = 0; i < nr_of_dpus; i++) {
+                        buffers[i].clear();
                     }
                 }
-            } catch (const dpu::DpuError & e) {
-                std::cerr << e.what() << std::endl;
+                buffers[buffer_idx++].push_back(item);
             }
         }
+        if (buffers[0].size() > 0) {
+            dpu_count_items(system, buffers);
+        }
+
+        for (int i = 0; i < NR_DB_ITEMS; i++) {
+            if (_item_count[i] >= _min_support) {
+                std::lock_guard<std::mutex> lock(mutex);
+                frequent_items.push_back({i, _item_count[i]});
+            }
+        }
+    } catch (const dpu::DpuError & e) {
+        std::cerr << e.what() << std::endl;
+    }
         
-    );
-    }
-    for (auto& thread : threads) {
-        thread.join();
-    }
+    
     return frequent_items;
 }
 
