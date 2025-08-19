@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <vector>
 #include <map>
+#include <functional>
 
 void print_tree(Node* node, int depth = 0) {
     for (int i = 0; i < depth; ++i) std::cout << "  ";
@@ -106,19 +107,19 @@ void FPTree::build_fp_array() {
     Node* target_leaf = _leaf_head;
     while (target_leaf) {
         Node* current = target_leaf;
-        _fp_array.push_back({current->item, -1, current->count, 0});
+        _fp_array.push_back(FPArrayEntry {current->item, -1, current->count, current->depth});
         while (current) {
             Node* parent = current->parent;
             FPArrayEntry& last_entry = _fp_array.back();
             if (item_idx_table.find(parent->item) != item_idx_table.end()) {
-                last_entry.parent_index = item_idx_table[parent->item];
+                last_entry.parent_pos = item_idx_table[parent->item];
                 break;
             }
 
             item_idx_table[parent->item] = _fp_array.size();
-            last_entry.parent_index = item_idx_table[parent->item];
+            last_entry.parent_pos = item_idx_table[parent->item];
 
-            _fp_array.push_back({parent->item, -1, parent->count, 0});
+            _fp_array.push_back({parent->item, -1, parent->count, parent->depth});
             current = parent;
         }
         target_leaf = target_leaf->next_leaf;
@@ -128,9 +129,40 @@ void FPTree::build_fp_array() {
 void FPTree::build_k1_ele_pos() {
     _k1_ele_pos.clear();
 
-    for (int i = 0; i < _fp_array.size(); ++i) {
+    for (uint32_t i = 0; i < _fp_array.size(); ++i) {
         const FPArrayEntry& entry = _fp_array[i];
-        _k1_ele_pos.push_back({entry.item, i, entry.support, 0});
+        _k1_ele_pos.push_back(ElePosEntry {entry.item, i, entry.support, 0});
+    }
+}
+
+void FPTree::dpu_mine_candidates() {
+    
+}
+
+void FPTree::mine_frequent_itemsets() {
+    auto distribute_ele_pos = [this](const std::vector<ElePosEntry>& ele_pos, int num_dpus) {
+        std::vector<std::vector<ElePosEntry>> distributed;
+        int quotent = ele_pos.size() / num_dpus;
+        int remainder = ele_pos.size() % num_dpus;
+        
+        for (int i = 0; i < num_dpus; ++i) {
+            int start = i * quotent + std::min(i, remainder);
+            int end = start + quotent + (i < remainder ? 1 : 0);
+            distributed.push_back(std::vector<ElePosEntry>(ele_pos.begin() + start, ele_pos.begin() + end));
+
+            int candidate_start_idx = 0;
+            for (int j = 0; j < distributed.back().size(); ++j) {
+                distributed.back()[j].candidate_start_idx = candidate_start_idx;
+                candidate_start_idx += _fp_array[distributed.back()[j].pos].depth - 1;
+            }
+        }
+
+        return distributed;
+    };
+
+    std::vector<ElePosEntry> ele_pos = _k1_ele_pos;
+    while (ele_pos.size() > 0) {
+        
     }
 }
 
