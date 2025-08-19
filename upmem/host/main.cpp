@@ -19,7 +19,7 @@ int main() {
     // std::vector<int> prefix_path;
     // fp_tree.mine_pattern(prefix_path, frequent_itemsets);
 
-    for (const auto& itemset : frequent_itemsets) {
+    for (const auto& itemset : fp_tree.get_frequent_itemsets()) {
         for (int item : itemset) {
             std::cout << item << " ";
         }

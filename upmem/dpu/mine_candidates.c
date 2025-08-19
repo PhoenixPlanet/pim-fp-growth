@@ -13,15 +13,15 @@ typedef struct ElePosEntry ElePosEntry_t;
 typedef struct FPArrayEntry FPArrayEntry_t;
 typedef struct CandidateEntry CandidateEntry_t;
 
-inline void get_fp_array_item(uint32_t idx, FPArrayEntry_t* item) {
+static inline void get_fp_array_item(uint32_t idx, FPArrayEntry_t* item) {
     mram_read((__mram_ptr void const*) (DPU_MRAM_HEAP_POINTER + idx * sizeof(FPArrayEntry_t)), item, sizeof(FPArrayEntry_t));
 }
 
-inline void get_k_elepos_item(uint32_t idx, ElePosEntry_t* item) {
+static inline void get_k_elepos_item(uint32_t idx, ElePosEntry_t* item) {
     mram_read((__mram_ptr void const*) (DPU_MRAM_HEAP_POINTER + MRAM_FP_ARRAY_SZ + idx * sizeof(ElePosEntry_t)), item, sizeof(ElePosEntry_t));
 }
 
-inline void set_candidate_item(uint32_t idx, const CandidateEntry_t* item) {
+static inline void set_candidate_item(uint32_t idx, const CandidateEntry_t* item) {
     mram_write(item, (__mram_ptr void*) (DPU_MRAM_HEAP_POINTER + MRAM_FP_ARRAY_SZ + MRAM_FP_ELEPOS_SZ + idx * sizeof(CandidateEntry_t)), sizeof(CandidateEntry_t));
 }
 

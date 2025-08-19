@@ -41,6 +41,13 @@ public:
     void mine_pattern(std::vector<int>& prefix_path, std::vector<std::vector<int>>& frequent_itemsets);
     void delete_tree();
 
+    std::vector<std::vector<uint32_t>> get_frequent_itemsets() {
+        std::vector<std::vector<uint32_t>> frequent_itemsets(_frequent_itemsets_1.begin(), _frequent_itemsets_1.end());
+        frequent_itemsets.insert(frequent_itemsets.end(), _frequent_itemsets_gt1.begin(), _frequent_itemsets_gt1.end());
+
+        return frequent_itemsets;
+    }
+
 private:
     Node* _root; // Root item number is 0
     Node* _leaf_head;

@@ -28,9 +28,11 @@ int main() {
 
     if (id == 0) {
         mem_reset();
-        uint32_t zero_array[NR_DB_ITEMS] = {0};
+        uint32_t zero_array[2] = {0};
         for (uint32_t t = 0; t < NR_TASKLETS; t++) {
-            mram_write(zero_array, (__mram_ptr void *)(histogram_addr + t * NR_DB_ITEMS * sizeof(uint32_t)), NR_DB_ITEMS * sizeof(uint32_t));
+            for (uint32_t i = 0; i < NR_DB_ITEMS; i += 2) {
+                mram_write(zero_array, (__mram_ptr void *)(histogram_addr + t * NR_DB_ITEMS * sizeof(uint32_t) + i * sizeof(uint32_t)), sizeof(uint32_t) * 2);
+            }
         }
     }
     barrier_wait(&barrier);
@@ -51,7 +53,10 @@ int main() {
         }
     }
 
-    mram_write(local_hist, (__mram_ptr void*) (histogram_addr + (NR_DB_ITEMS * id * sizeof(uint32_t))), NR_DB_ITEMS * sizeof(int32_t));
+    //mram_write(local_hist, (__mram_ptr void*) (histogram_addr + (NR_DB_ITEMS * id * sizeof(uint32_t))), NR_DB_ITEMS * sizeof(int32_t));
+    for (uint32_t i = 0; i < NR_DB_ITEMS; i += 2) {
+        mram_write(&local_hist[i], (__mram_ptr void *)(histogram_addr + (NR_DB_ITEMS * id + i) * sizeof(uint32_t)), sizeof(uint32_t) * 2);
+    }
 
     barrier_wait(&barrier);
 
