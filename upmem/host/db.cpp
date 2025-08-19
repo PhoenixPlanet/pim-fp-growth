@@ -55,12 +55,12 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
         }
     }
 
-    system.copy("buffer", buffers);
+    system.copy(DPU_MRAM_HEAP_POINTER_NAME, buffers);
     system.copy("count", counts);
 
     system.exec();
 
-    system.copy(results, "histogram_mram");
+    system.copy(results, DPU_MRAM_HEAP_POINTER_NAME, MRAM_AVAILABLE);
 
     // Reduce results
     for (int i = 0; i < NR_DB_ITEMS; i++) {

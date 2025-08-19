@@ -14,9 +14,9 @@
 #define DPU_DB_FILTER "db_filter"
 #define DPU_COND_FPTREE "cond_fptree"
 
-#define BLOCK_SIZE 1024
-#define MRAM_MAX 64ull << 20
-#define MRAM_RESERVED 1ull  << 20
+#define BLOCK_SIZE (1024)
+#define MRAM_MAX (64ull << 20)
+#define MRAM_RESERVED (1ull  << 20)
 
 #define ALIGN_DOWN(BYTES, ALIGN) ((BYTES) - ((BYTES) % (ALIGN)))
 #define MRAM_AVAILABLE ALIGN_DOWN(MRAM_MAX - MRAM_RESERVED, 8)
