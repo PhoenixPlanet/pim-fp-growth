@@ -6,6 +6,7 @@
 
 #include "db.hpp"
 #include "common.h"
+#include "param.h"
 
 struct Node {
     uint32_t item;
@@ -26,8 +27,6 @@ struct HeaderTableEntry {
     std::list<Node*> node_link;
 };
 
-
-
 class FPTree {
 public:
     FPTree(int min_support, Database* db): _root(new Node(0, 0, nullptr, 0)), _min_support(min_support), _db(db) {}
@@ -36,7 +35,7 @@ public:
     void build_tree();
     void build_fp_array();
     void build_k1_ele_pos();
-    void dpu_mine_candidates();
+    std::unordered_map<uint64_t, CandidateEntry> dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEntry>& ele_pos);
     void mine_frequent_itemsets();
     void build_conditional_tree(std::vector<std::pair<std::vector<int>, int>>& pattern_base, int min_support);
     void mine_pattern(std::vector<int>& prefix_path, std::vector<std::vector<int>>& frequent_itemsets);
@@ -50,6 +49,9 @@ private:
     std::vector<HeaderTableEntry> _header_table;
     std::vector<FPArrayEntry> _fp_array;
     std::vector<ElePosEntry> _k1_ele_pos;
+    std::vector<std::vector<uint32_t>> _frequent_itemsets_1;
+    std::vector<std::vector<uint32_t>> _frequent_itemsets_gt1;
+    uint32_t _itemset_id = NR_DB_ITEMS;
 
     void delete_tree(Node* node);
 };

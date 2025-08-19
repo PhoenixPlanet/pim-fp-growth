@@ -3,6 +3,11 @@
 #include <vector>
 #include <map>
 #include <functional>
+#include <unordered_map>
+#include <utility>
+#include <dpu>
+
+#include "param.h"
 
 void print_tree(Node* node, int depth = 0) {
     for (int i = 0; i < depth; ++i) std::cout << "  ";
@@ -22,6 +27,11 @@ void FPTree::build_tree() {
     std::sort(frequent_items.begin(), frequent_items.end(), [](const auto& a, const auto& b) {
         return a.second > b.second;
     });
+
+    _frequent_itemsets_1.clear();
+    for (const auto& item : frequent_items) {
+        _frequent_itemsets_1.push_back({static_cast<uint32_t>(item.first), 0});
+    }
 
     _header_table.clear();
     for (const auto& item : frequent_items) {
@@ -135,34 +145,91 @@ void FPTree::build_k1_ele_pos() {
     }
 }
 
-void FPTree::dpu_mine_candidates() {
+std::unordered_map<uint64_t, CandidateEntry> FPTree::dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEntry>& ele_pos) {
+    int nr_of_dpus = system.dpus().size();
+
+    // Distribute ElePos across DPUs
+    std::vector<std::vector<ElePosEntry>> distributed;
+    int quotent = ele_pos.size() / nr_of_dpus;
+    int remainder = ele_pos.size() % nr_of_dpus;
     
+    int max_candidates = 0;
+    std::vector<int> candidate_cnts(nr_of_dpus, 0);
+    for (int i = 0; i < nr_of_dpus; ++i) {
+        int start = i * quotent + std::min(i, remainder);
+        int end = start + quotent + (i < remainder ? 1 : 0);
+        distributed.push_back(std::vector<ElePosEntry>(ele_pos.begin() + start, ele_pos.begin() + end));
+
+        // TODO: Consider this logic to be moved to the DPU code
+        int candidate_start_idx = 0;
+        for (int j = 0; j < distributed.back().size(); ++j) {
+            distributed.back()[j].candidate_start_idx = candidate_start_idx;
+            candidate_start_idx += _fp_array[distributed.back()[j].pos].depth - 1;
+        }
+        candidate_cnts[i] = candidate_start_idx;
+        max_candidates = std::max(max_candidates, candidate_start_idx);
+    }
+
+    std::vector<std::vector<uint32_t>> counts(nr_of_dpus, std::vector<uint32_t>(1, 0));
+    for (int i = 0; i < nr_of_dpus; ++i) {
+        counts[i][0] = distributed[i].size();
+    }
+
+    system.copy("k_elepos_size", counts);
+    system.copy(DPU_MRAM_HEAP_POINTER_NAME, _fp_array);
+    system.copy(DPU_MRAM_HEAP_POINTER_NAME, distributed, MRAM_FP_ARRAY_SZ);
+    system.exec();
+
+    std::vector<std::vector<CandidateEntry>> candidates(nr_of_dpus, std::vector<CandidateEntry>(max_candidates));
+    system.copy(candidates, DPU_MRAM_HEAP_POINTER_NAME, MRAM_FP_ARRAY_SZ + MRAM_FP_ELEPOS_SZ);
+
+    std::unordered_map<uint64_t, CandidateEntry> candidate_map;
+    for (int i = 0; i < nr_of_dpus; ++i) {
+        for (int j = 0; j < candidate_cnts[i]; ++j) {
+            const CandidateEntry& candidate = candidates[i][j];
+            if (candidate.suffix_item == 0) continue; // Skip root item
+            uint64_t key = (static_cast<uint64_t>(candidate.prefix_item) << 32) | candidate.suffix_item;
+            
+            if (candidate_map.find(key) == candidate_map.end()) {
+                candidate_map[key] = candidate;
+            } else {
+                candidate_map[key].support += candidate.support;
+            }
+        }
+    }
+
+    return candidate_map;
 }
 
 void FPTree::mine_frequent_itemsets() {
-    auto distribute_ele_pos = [this](const std::vector<ElePosEntry>& ele_pos, int num_dpus) {
-        std::vector<std::vector<ElePosEntry>> distributed;
-        int quotent = ele_pos.size() / num_dpus;
-        int remainder = ele_pos.size() % num_dpus;
-        
-        for (int i = 0; i < num_dpus; ++i) {
-            int start = i * quotent + std::min(i, remainder);
-            int end = start + quotent + (i < remainder ? 1 : 0);
-            distributed.push_back(std::vector<ElePosEntry>(ele_pos.begin() + start, ele_pos.begin() + end));
-
-            int candidate_start_idx = 0;
-            for (int j = 0; j < distributed.back().size(); ++j) {
-                distributed.back()[j].candidate_start_idx = candidate_start_idx;
-                candidate_start_idx += _fp_array[distributed.back()[j].pos].depth - 1;
-            }
-        }
-
-        return distributed;
-    };
+    auto system = dpu::DpuSet::allocate(NR_DPUS);
+    system.load(DPU_MINE_CANDIDATES);
 
     std::vector<ElePosEntry> ele_pos = _k1_ele_pos;
     while (ele_pos.size() > 0) {
-        
+        auto candidates = std::move(dpu_mine_candidates(system, ele_pos));
+
+        std::vector<ElePosEntry> next_ele_pos;
+        for (const auto& [key, candidate] : candidates) {
+            if (candidate.support >= _min_support) {
+                if (candidate.prefix_item < NR_DB_ITEMS) {
+                    _frequent_itemsets_gt1.push_back({candidate.prefix_item, candidate.suffix_item});
+                } else {
+                    const auto& prefix = _frequent_itemsets_gt1[candidate.prefix_item - NR_DB_ITEMS];
+                    std::vector<uint32_t> itemset(prefix.begin(), prefix.end());
+                    itemset.push_back(candidate.suffix_item);
+                    _frequent_itemsets_gt1.push_back(itemset);
+                }
+
+                next_ele_pos.push_back(ElePosEntry {
+                    _itemset_id++,
+                    candidate.suffix_item_pos,
+                    candidate.support,
+                    0
+                });
+            }
+        }
+        ele_pos = std::move(next_ele_pos);
     }
 }
 

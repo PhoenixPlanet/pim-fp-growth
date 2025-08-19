@@ -50,8 +50,15 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
 
     for (int i = 0; i < nr_of_dpus; i++) {
         counts[i][0] = buffers[i].size();
-        if (counts[i][0] % 2 == 1) {
-            buffers[i].push_back(0);
+        if (i == 0) {
+            if (counts[0][0] % 2 == 1) {
+                buffers[0].push_back(0); // Ensure even number of elements for DPU processing
+            }
+        } else {
+            int padding = counts[i][0] - counts[0][0];
+            if (padding > 0) {
+                buffers[i].resize(buffers[i].size() + padding, 0); // Pad with zeros
+            } 
         }
     }
 

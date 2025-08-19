@@ -11,10 +11,13 @@ int main() {
 
     FPTree fp_tree(MIN_SUPPORT, &db);
     fp_tree.build_tree();
+    fp_tree.build_fp_array();
+    fp_tree.build_k1_ele_pos();
+    fp_tree.mine_frequent_itemsets();
 
-    std::vector<std::vector<int>> frequent_itemsets;
-    std::vector<int> prefix_path;
-    fp_tree.mine_pattern(prefix_path, frequent_itemsets);
+    // std::vector<std::vector<int>> frequent_itemsets;
+    // std::vector<int> prefix_path;
+    // fp_tree.mine_pattern(prefix_path, frequent_itemsets);
 
     for (const auto& itemset : frequent_itemsets) {
         for (int item : itemset) {
