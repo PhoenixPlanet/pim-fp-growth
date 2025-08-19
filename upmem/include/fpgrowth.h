@@ -61,6 +61,4 @@ private:
     void delete_tree(Node* node);
 };
 
-int mem_count;
-
 #endif
