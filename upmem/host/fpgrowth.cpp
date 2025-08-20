@@ -110,7 +110,7 @@ void FPTree::build_tree() {
 }
 
 void FPTree::build_fp_array() {
-    std::map<int32_t, int> item_idx_table;
+    std::map<Node*, int> item_idx_table;
     _fp_array.clear();
 
     Node* target_leaf = _leaf_head;
@@ -122,13 +122,13 @@ void FPTree::build_fp_array() {
 
             Node* parent = current->parent;
             FPArrayEntry& last_entry = _fp_array.back();
-            if (item_idx_table.find(parent->item) != item_idx_table.end()) {
-                last_entry.parent_pos = item_idx_table[parent->item];
+            if (item_idx_table.find(parent) != item_idx_table.end()) {
+                last_entry.parent_pos = item_idx_table[parent];
                 break;
             }
 
-            item_idx_table[parent->item] = _fp_array.size();
-            last_entry.parent_pos = item_idx_table[parent->item];
+            item_idx_table[parent] = _fp_array.size();
+            last_entry.parent_pos = item_idx_table[parent];
 
             _fp_array.push_back({parent->item, -1, parent->count, parent->depth});
             current = parent;

@@ -21,18 +21,46 @@ std::streampos find_next_line(std::ifstream& file, std::streampos start) {
 }
 
 std::vector<std::pair<std::streampos, std::streampos>> divide_file(std::ifstream& file, int num_parts) {
+    if (num_parts <= 0) {
+        return {};
+    }
+
     std::vector<std::pair<std::streampos, std::streampos>> parts;
     file.seekg(0, std::ios::end);
     std::streampos end = file.tellg();
     file.seekg(0, std::ios::beg);
-    
-    std::streampos part_size = end / num_parts;
-    std::streampos start = 0;
 
-    for (int i = 0; i < num_parts; ++i) {
-        std::streampos next_start = find_next_line(file, start + part_size);
-        parts.emplace_back(start, next_start);
-        start = next_start;
+    if (end == 0) {
+        return {};
+    }
+
+    if (num_parts == 1) {
+        parts.emplace_back(0, end);
+        return parts;
+    }
+
+    std::streampos part_size = end / num_parts;
+    std::streampos current_start = 0;
+
+    for (int i = 0; i < num_parts - 1; ++i) {
+        std::streampos ideal_split_point = (i + 1) * part_size;
+        
+        if (ideal_split_point >= end) {
+            break; 
+        }
+
+        std::streampos next_start = find_next_line(file, ideal_split_point);
+        
+        if (next_start > current_start && next_start < end) {
+            parts.emplace_back(current_start, next_start);
+            current_start = next_start;
+        } else {
+            break;
+        }
+    }
+
+    if (current_start < end) {
+        parts.emplace_back(current_start, end);
     }
 
     return parts;
@@ -128,7 +156,7 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
     }
 
     std::sort(frequent_items.begin(), frequent_items.end(), [](const auto& a, const auto& b) {
-        return a.second >= b.second;
+        return a.second > b.second;
     });
 
     for (int i = 0; i < frequent_items.size(); i++) {
