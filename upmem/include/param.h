@@ -26,6 +26,8 @@
 #define NR_DB_ITEMS 1024
 #endif
 
+#define DPU_CONFIG "backend=simulator"
+
 #define NR_THREADS 4
 
 #endif

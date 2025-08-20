@@ -90,7 +90,7 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
     seek_to_start();
     
     try {
-        auto system = dpu::DpuSet::allocate(NR_DPUS);
+        auto system = dpu::DpuSet::allocate(NR_DPUS, DPU_CONFIG);
         system.load(DPU_DB_COUNT_ITEM);
         
         uint32_t nr_of_dpus = system.dpus().size();

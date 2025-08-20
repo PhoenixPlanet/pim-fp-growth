@@ -205,34 +205,38 @@ std::unordered_map<uint64_t, CandidateEntry> FPTree::dpu_mine_candidates(dpu::Dp
 }
 
 void FPTree::mine_frequent_itemsets() {
-    auto system = dpu::DpuSet::allocate(NR_DPUS);
-    system.load(DPU_MINE_CANDIDATES);
+    try {
+        dpu::DpuSet system = dpu::DpuSet::allocate(NR_DPUS, DPU_CONFIG);
+        system.load(DPU_MINE_CANDIDATES);
+        printf("DPU program loaded.\n");
+        std::vector<ElePosEntry> ele_pos = _k1_ele_pos;
+        while (ele_pos.size() > 0) {
+            auto candidates = std::move(dpu_mine_candidates(system, ele_pos));
 
-    std::vector<ElePosEntry> ele_pos = _k1_ele_pos;
-    while (ele_pos.size() > 0) {
-        auto candidates = std::move(dpu_mine_candidates(system, ele_pos));
+            std::vector<ElePosEntry> next_ele_pos;
+            for (const auto& [key, candidate] : candidates) {
+                if (candidate.support >= _min_support) {
+                    if (candidate.prefix_item < NR_DB_ITEMS) {
+                        _frequent_itemsets_gt1.push_back({candidate.prefix_item, candidate.suffix_item});
+                    } else {
+                        const auto& prefix = _frequent_itemsets_gt1[candidate.prefix_item - NR_DB_ITEMS];
+                        std::vector<uint32_t> itemset(prefix.begin(), prefix.end());
+                        itemset.push_back(candidate.suffix_item);
+                        _frequent_itemsets_gt1.push_back(itemset);
+                    }
 
-        std::vector<ElePosEntry> next_ele_pos;
-        for (const auto& [key, candidate] : candidates) {
-            if (candidate.support >= _min_support) {
-                if (candidate.prefix_item < NR_DB_ITEMS) {
-                    _frequent_itemsets_gt1.push_back({candidate.prefix_item, candidate.suffix_item});
-                } else {
-                    const auto& prefix = _frequent_itemsets_gt1[candidate.prefix_item - NR_DB_ITEMS];
-                    std::vector<uint32_t> itemset(prefix.begin(), prefix.end());
-                    itemset.push_back(candidate.suffix_item);
-                    _frequent_itemsets_gt1.push_back(itemset);
+                    next_ele_pos.push_back(ElePosEntry {
+                        _itemset_id++,
+                        candidate.suffix_item_pos,
+                        candidate.support,
+                        0
+                    });
                 }
-
-                next_ele_pos.push_back(ElePosEntry {
-                    _itemset_id++,
-                    candidate.suffix_item_pos,
-                    candidate.support,
-                    0
-                });
             }
+            ele_pos = std::move(next_ele_pos);
         }
-        ele_pos = std::move(next_ele_pos);
+    } catch (const dpu::DpuError& e) {
+        std::cerr << "DPU error: " << e.what() << std::endl;
     }
 }
 

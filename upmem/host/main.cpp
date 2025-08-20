@@ -4,16 +4,20 @@
 #include <iostream>
 
 #define MIN_SUPPORT 3
-#define DB_PATH "data.txt"
+#define DB_PATH "./DB/DataSetA_norm.txt"
 
 int main() {
     Database db(DB_PATH); 
 
     FPTree fp_tree(MIN_SUPPORT, &db);
     fp_tree.build_tree();
+    printf("Build tree completed.\n");
     fp_tree.build_fp_array();
+    printf("Build FP array completed.\n");
     fp_tree.build_k1_ele_pos();
+    printf("Build K1 ElePos completed.\n");
     fp_tree.mine_frequent_itemsets();
+    printf("Mine frequent itemsets completed.\n");
 
     // std::vector<std::vector<int>> frequent_itemsets;
     // std::vector<int> prefix_path;
