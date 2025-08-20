@@ -102,7 +102,9 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
         uint32_t acc = 0;
         for (int d = 0; d < nr_of_dpus; d++) {
             for (int t = 0; t < NR_TASKLETS; t++) {
+                #ifdef PRINT
                 printf("DPU %d, Tasklet %d, Item %d: %u\n", d, t, i, results[d][NR_DB_ITEMS * t + i]);
+                #endif
                 acc += results[d][NR_DB_ITEMS * t + i];
             }
         }
@@ -203,6 +205,7 @@ std::deque<std::vector<int>> Database::filtered_items() {
         results.insert(results.end(), result.begin(), result.end());
     }
 
+    #ifdef PRINT
     for (auto& items : results) {
         printf("Filtered items: ");
         for (int item : items) {
@@ -210,5 +213,6 @@ std::deque<std::vector<int>> Database::filtered_items() {
         }
         printf("\n");
     }
+    #endif
     return results;
 }

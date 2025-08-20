@@ -35,7 +35,9 @@ public:
     void build_tree();
     void build_fp_array();
     void build_k1_ele_pos();
-    std::unordered_map<uint64_t, CandidateEntry> dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEntry>& ele_pos);
+    void dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEntry>& ele_pos, 
+                             std::unordered_map<uint64_t, CandidateEntry>& candidate_map);
+    std::unordered_map<uint64_t, CandidateEntry> mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEntry>& ele_pos);
     void mine_frequent_itemsets();
     void build_conditional_tree(std::vector<std::pair<std::vector<int>, int>>& pattern_base, int min_support);
     void mine_pattern(std::vector<int>& prefix_path, std::vector<std::vector<int>>& frequent_itemsets);

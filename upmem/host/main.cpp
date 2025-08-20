@@ -3,7 +3,7 @@
 
 #include <iostream>
 
-#define MIN_SUPPORT 3
+#define MIN_SUPPORT 1460
 #define DB_PATH "../test/test.txt"
 
 int main() {
