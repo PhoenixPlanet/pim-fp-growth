@@ -74,6 +74,7 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
         uint32_t acc = 0;
         for (int d = 0; d < nr_of_dpus; d++) {
             for (int t = 0; t < NR_TASKLETS; t++) {
+                printf("DPU %d, Tasklet %d, Item %d: %u\n", d, t, i, results[d][NR_DB_ITEMS * t + i]);
                 acc += results[d][NR_DB_ITEMS * t + i];
             }
         }
@@ -135,11 +136,13 @@ std::deque<std::vector<int>> Database::filtered_items() {
     std::vector<std::pair<std::streampos, std::streampos>> parts = divide_file(_file, NR_THREADS);
     std::vector<std::thread> threads;
 
-    for (int i = 0; i <NR_THREADS; i++) {
+    for (int i = 0; i < NR_THREADS; i++) {
         threads.emplace_back([this, i, &parts, &all_results]() {
-            _file.seekg(parts[i].first);
+            std::ifstream thread_file(_file_path); // Open a separate file stream for each thread
+            thread_file.seekg(parts[i].first);
             std::string line;
-            while (_file.tellg() < parts[i].second && std::getline(_file, line)) {
+            while (thread_file.tellg() < parts[i].second && std::getline(thread_file, line)) {
+                //if(thread_file.eof()) break; // Check for end of file
                 std::istringstream iss(line);
                 std::vector<int> items;
                 int item;
@@ -157,12 +160,19 @@ std::deque<std::vector<int>> Database::filtered_items() {
             }
         });
     }
-    for (auto& thread : threads) {
-        thread.join();
-    }
+    for (auto& t : threads) t.join();
+    // Combine results from all threads
     std::deque<std::vector<int>> results;
     for (const auto& result : all_results) {
         results.insert(results.end(), result.begin(), result.end());
+    }
+
+    for (auto& items : results) {
+        printf("Filtered items: ");
+        for (int item : items) {
+            printf("%d ", item);
+        }
+        printf("\n");
     }
     return results;
 }
