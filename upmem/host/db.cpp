@@ -46,7 +46,7 @@ void Database::seek_to_start() {
 void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int32_t>>& buffers) {
     uint32_t nr_of_dpus = system.dpus().size();
     std::vector<std::vector<uint32_t>> counts(nr_of_dpus, std::vector<uint32_t>(1, 0));
-    std::vector<std::vector<uint32_t>> results(nr_of_dpus, std::vector<uint32_t>(NR_DB_ITEMS * NR_TASKLETS));
+    std::vector<std::vector<uint32_t>> results(nr_of_dpus, std::vector<uint32_t>(NR_DB_ITEMS * NR_TASKLETS, 0));
 
     for (int i = 0; i < nr_of_dpus; i++) {
         counts[i][0] = buffers[i].size();
@@ -126,6 +126,14 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
     } catch (const dpu::DpuError & e) {
         std::cerr << e.what() << std::endl;
     }
+
+    std::sort(frequent_items.begin(), frequent_items.end(), [](const auto& a, const auto& b) {
+        return a.second >= b.second;
+    });
+
+    for (int i = 0; i < frequent_items.size(); i++) {
+        _item_priority[frequent_items[i].first] = frequent_items.size() - i;
+    }
     
     return frequent_items;
 }
@@ -153,7 +161,7 @@ std::deque<std::vector<int>> Database::filtered_items() {
                 }
                 if (!items.empty()) {
                     std::sort(items.begin(), items.end(), [this](int a, int b) {
-                        return _item_count[a] > _item_count[b];
+                        return _item_priority[a] > _item_priority[b];
                     });
                     all_results[i].push_back(items);
                 }

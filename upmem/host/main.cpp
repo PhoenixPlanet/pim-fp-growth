@@ -4,7 +4,7 @@
 #include <iostream>
 
 #define MIN_SUPPORT 3
-#define DB_PATH "../DB/DataSetA_norm.txt"
+#define DB_PATH "../test/test.txt"
 
 int main() {
     Database db(DB_PATH); 

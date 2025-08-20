@@ -5,7 +5,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-#include <map>
+#include <unordered_map>
 #include <vector>
 #include <utility>
 #include <optional>
@@ -28,6 +28,7 @@ public:
     std::deque<std::vector<int>> filtered_items();
 
 private:
+    std::unordered_map<int, int> _item_priority = {};
     std::string _file_path;
     std::ifstream _file;
     int _min_support;

@@ -29,7 +29,7 @@ void FPTree::build_tree() {
 
     _frequent_itemsets_1.clear();
     for (const auto& item : frequent_items) {
-        _frequent_itemsets_1.push_back({static_cast<uint32_t>(item.first), 0});
+        _frequent_itemsets_1.push_back({static_cast<uint32_t>(item.first)});
     }
 
     _header_table.clear();
@@ -118,6 +118,8 @@ void FPTree::build_fp_array() {
         Node* current = target_leaf;
         _fp_array.push_back(FPArrayEntry {current->item, -1, current->count, current->depth});
         while (current) {
+            if (current->item == 0) break;
+
             Node* parent = current->parent;
             FPArrayEntry& last_entry = _fp_array.back();
             if (item_idx_table.find(parent->item) != item_idx_table.end()) {
@@ -180,7 +182,7 @@ std::unordered_map<uint64_t, CandidateEntry> FPTree::dpu_mine_candidates(dpu::Dp
 
     system.copy("k_elepos_size", counts);
     system.copy(DPU_MRAM_HEAP_POINTER_NAME, _fp_array);
-    system.copy(DPU_MRAM_HEAP_POINTER_NAME, distributed, MRAM_FP_ARRAY_SZ);
+    system.copy(DPU_MRAM_HEAP_POINTER_NAME, MRAM_FP_ARRAY_SZ, distributed);
     system.exec();
 
     std::vector<std::vector<CandidateEntry>> candidates(nr_of_dpus, std::vector<CandidateEntry>(max_candidates));
