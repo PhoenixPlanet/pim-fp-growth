@@ -168,6 +168,7 @@ void FPTree::dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEn
         int candidate_start_idx = 0;
         for (int j = 0; j < distributed.back().size(); ++j) {
             distributed.back()[j].candidate_start_idx = candidate_start_idx;
+            if (distributed.back()[j].item == 0) continue;
             candidate_start_idx += _fp_array[distributed.back()[j].pos].depth - 1;
         }
         candidate_cnts[i] = candidate_start_idx;

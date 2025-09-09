@@ -3,8 +3,8 @@
 
 #include <iostream>
 
-#define MIN_SUPPORT 1460
-#define DB_PATH "../test/test.txt"
+#define MIN_SUPPORT 4
+#define DB_PATH "../DB/DataSetA_norm.txt"
 
 int main() {
     Database db(DB_PATH); 
