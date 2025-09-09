@@ -23,7 +23,7 @@
 #define MRAM_AVAILABLE ALIGN_DOWN(MRAM_MAX - MRAM_RESERVED, 8)
 
 #ifndef NR_DB_ITEMS
-#define NR_DB_ITEMS 1024
+#define NR_DB_ITEMS (1024)
 #endif
 
 #define DPU_CONFIG "backend=simulator"
