@@ -1,3 +1,35 @@
 .vscode
 .cache
 build/
+
+# Python virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Compiled C++ files
+*.o
+*.out
+*.exe
+
+# IDE files
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build directories
+dist/
+
+# Temporary files
+*.tmp
+*.temp
