@@ -20,6 +20,12 @@ __host uint32_t count; // TODO: Consider copy this value before use (tasklet-saf
 
 int main() {
     const sysname_t id = me();
+
+    if (id == 0) {
+        mem_reset();
+    }
+    barrier_wait(&barrier);
+
     uint32_t rounded_count = (count + 1U) & ~1U; // (count + (count % 2))
     uint32_t elem_stride = NR_TASKLETS * CACHE_ELEM;
 
