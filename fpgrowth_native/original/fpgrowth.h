@@ -23,8 +23,10 @@ struct HeaderTableEntry {
 
 class FPTree {
 public:
-    FPTree(int min_support, Database* db): _root(new Node(-1, 0, nullptr)), _min_support(min_support), _db(db) {}
-    FPTree(int min_support): _root(new Node(-1, 0, nullptr)), _min_support(min_support), _db(nullptr) {}
+    FPTree(int min_support, Database* db)
+        : _root(new Node(-1, 0, nullptr)), _db(db), _min_support(min_support) {}
+    FPTree(int min_support)
+        : _root(new Node(-1, 0, nullptr)), _db(nullptr), _min_support(min_support) {}
 
     void build_tree();
     void build_conditional_tree(std::vector<std::pair<std::vector<int>, int>>& pattern_base, int min_support);
@@ -40,6 +42,6 @@ private:
     void delete_tree(Node* node);
 };
 
-int mem_count;
+extern int mem_count;
 
 #endif

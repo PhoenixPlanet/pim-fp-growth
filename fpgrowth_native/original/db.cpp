@@ -33,10 +33,12 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
     return frequent_items;
 }
 
-std::optional<std::vector<int>> Database::filtered_items() {
-    std::string line;
 
-    if (std::getline(_file, line)) {
+std::vector<std::vector<int>> Database::get_all_filtered_transactions() {
+    seek_to_start();
+    std::vector<std::vector<int>> transactions;
+    std::string line;
+    while (std::getline(_file, line)) {
         std::istringstream iss(line);
         std::vector<int> items;
         int item;
@@ -45,13 +47,12 @@ std::optional<std::vector<int>> Database::filtered_items() {
                 items.push_back(item);
             }
         }
-
         std::sort(items.begin(), items.end(), [this](int a, int b) {
             return _item_count[a] > _item_count[b];
         });
-
-        return items;
-    } else {
-        return std::nullopt;
+        if (!items.empty()) {
+            transactions.push_back(items);
+        }
     }
+    return transactions;
 }

@@ -21,7 +21,8 @@ public:
 
     void seek_to_start();
     std::vector<std::pair<int, int>> scan_for_frequent_items(int min_support);
-    std::optional<std::vector<int>> filtered_items();
+
+    std::vector<std::vector<int>> get_all_filtered_transactions();
 
 private:
     std::string _file_path;

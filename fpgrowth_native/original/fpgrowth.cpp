@@ -28,14 +28,10 @@ void FPTree::build_tree() {
         _header_table.push_back(entry);
     }
 
-    _db->seek_to_start();
-    while (true) {
-        auto items = _db->filtered_items();
-        
-        if (!items) break;
-
+    std::vector<std::vector<int>> transactions = _db->get_all_filtered_transactions();
+    for (const auto& items : transactions) {
         Node* current_node = _root;
-        for (int item : *items) {
+        for (int item : items) {
             bool found = false;
             for (Node* child : current_node->child) {
                 if (child->item == item) {
@@ -128,6 +124,7 @@ void FPTree::build_conditional_tree(std::vector<std::pair<std::vector<int>, int>
 }
 
 void FPTree::mine_pattern(std::vector<int>& prefix_path, std::vector<std::vector<int>>& frequent_itemsets) {
+    // Process header table in forward order (most frequent to least frequent)
     for (const auto& entry : _header_table) {
         int item = entry.item;
         std::vector<int> new_prefix_path = prefix_path;
