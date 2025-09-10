@@ -13,8 +13,48 @@ VENV_DIR="python/venv"
 # Ensure output directory exists
 mkdir -p "$OUTPUT_DIR"
 
-# Activate Python venv
+# Check Python3 installation
+echo "Checking Python3 installation..."
+if ! command -v python3 &> /dev/null; then
+    echo "Error: Python3 is not installed."
+    exit 1
+else
+    echo "Python3 is already installed."
+fi
+
+# Check and create virtual environment
+echo "Checking Python virtual environment..."
+if [ ! -d "$VENV_DIR" ]; then
+    echo "Creating Python virtual environment..."
+    python3 -m venv "$VENV_DIR"
+else
+    echo "Python virtual environment already exists."
+fi
+
+# Activate virtual environment and install requirements
+echo "Activating virtual environment and installing requirements..."
 source "$VENV_DIR/bin/activate"
+pip install --upgrade pip
+pip install -r python/requirements.txt
+
+# Build all projects
+echo "Building original C++ project..."
+cd original
+make clean
+make
+cd ..
+
+echo "Building pfp_growth C++ project..."
+cd pfp_growth
+make clean
+make
+cd ..
+
+echo "Building upmem C++ project..."
+cd upmem
+make clean
+make
+cd ..
 
 # Define min_support values for different datasets
 declare -A min_supports
@@ -43,3 +83,7 @@ for input_file in "$INPUT_DIR"/*; do
     echo "Running Python on $input_file with min_support=$min_support..."
     python3 "$PY_SCRIPT" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_py.$ext"
 done
+
+# Compare outputs
+echo "Comparing outputs..."
+python3 compare_outputs.py
