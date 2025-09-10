@@ -70,6 +70,8 @@ def main():
     org_total = 0
     pfp_matches = 0
     pfp_total = 0
+    upmem_matches = 0
+    upmem_total = 0
     
     for py_file in sorted(py_files):
         base_name = os.path.basename(py_file)
@@ -80,6 +82,7 @@ def main():
         
         org_file = os.path.join(output_dir, f"{base_prefix}_org.{ext}")
         pfp_file = os.path.join(output_dir, f"{base_prefix}_pfp.{ext}")
+        upmem_file = os.path.join(output_dir, f"{base_prefix}_upmem.{ext}")
         
         print(f"Comparing {base_name}...")
         
@@ -87,6 +90,7 @@ def main():
         py_size = os.path.getsize(py_file) if os.path.exists(py_file) else 0
         org_size = os.path.getsize(org_file) if os.path.exists(org_file) else 0
         pfp_size = os.path.getsize(pfp_file) if os.path.exists(pfp_file) else 0
+        upmem_size = os.path.getsize(upmem_file) if os.path.exists(upmem_file) else 0
         
         # Skip very large files to avoid memory issues
         max_size = 10 * 1024 * 1024  # 10MB limit
@@ -163,6 +167,42 @@ def main():
         else:
             print(f"  PFP: File {pfp_file} not found")
         
+        # Compare with upmem
+        if os.path.exists(upmem_file):
+            upmem_total += 1
+            if py_size > max_size or upmem_size > max_size:
+                print(f"  UPMEM: Skipped (file too large: py={py_size//1024}KB, upmem={upmem_size//1024}KB)")
+            else:
+                is_match, common, py_unique, upmem_unique = compare_files(py_file, upmem_file)
+                
+                if is_match:
+                    print(f"  UPMEM: ✓ Perfect match ({common} itemsets)")
+                    upmem_matches += 1
+                else:
+                    print(f"  UPMEM: ✗ Mismatch")
+                    print(f"    Common: {common} itemsets")
+                    print(f"    Python unique: {py_unique} itemsets")
+                    print(f"    UPMEM unique: {upmem_unique} itemsets")
+                    
+                    # Show a few examples of differences if not too many
+                    if py_unique + upmem_unique <= 10:
+                        py_itemsets = load_itemsets(py_file)
+                        upmem_itemsets = load_itemsets(upmem_file)
+                        py_only = py_itemsets - upmem_itemsets
+                        upmem_only = upmem_itemsets - py_itemsets
+                        
+                        if py_only:
+                            print(f"    Examples of Python-only itemsets:")
+                            for itemset in sorted(py_only, key=lambda x: (len(x), sorted(x)))[:3]:
+                                print(f"      {format_itemset(itemset)}")
+                        
+                        if upmem_only:
+                            print(f"    Examples of UPMEM-only itemsets:")
+                            for itemset in sorted(upmem_only, key=lambda x: (len(x), sorted(x)))[:3]:
+                                print(f"      {format_itemset(itemset)}")
+        else:
+            print(f"  UPMEM: File {upmem_file} not found")
+        
         print()
     
     # Print final scores
@@ -177,6 +217,11 @@ def main():
         print(f"PFP Score: {pfp_matches}/{pfp_total} matched ({pfp_matches/pfp_total*100:.1f}%)")
     else:
         print("PFP Score: No files to compare")
+    
+    if upmem_total > 0:
+        print(f"UPMEM Score: {upmem_matches}/{upmem_total} matched ({upmem_matches/upmem_total*100:.1f}%)")
+    else:
+        print("UPMEM Score: No files to compare")
 
 if __name__ == "__main__":
     main()

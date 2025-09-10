@@ -1,0 +1,12 @@
+Lassi 1
+Coffee Powder 2
+Butter 3
+Yougurt 4
+Ghee 5
+Cheese 6
+Tea Powder 7
+Panner 8
+Bread 9
+Sugar 10
+Sweet 11
+Milk 12

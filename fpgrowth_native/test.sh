@@ -6,6 +6,7 @@ INPUT_DIR="input"
 OUTPUT_DIR="output"
 ORIGINAL_EXE="original/fpgrowth"
 PFP_EXE="pfp_growth/fpgrowth_cpu"
+UPMEM_EXE="upmem/build/main"
 PY_SCRIPT="python/fp_growth.py"
 VENV_DIR="python/venv"
 
@@ -37,6 +38,8 @@ for input_file in "$INPUT_DIR"/*; do
     "$ORIGINAL_EXE" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_org.$ext"
     echo "Running pfp_growth C++ on $input_file with min_support=$min_support..."
     "$PFP_EXE" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_pfp.$ext"
+    echo "Running upmem C++ on $input_file with min_support=$min_support..."
+    "$UPMEM_EXE" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_upmem.$ext"
     echo "Running Python on $input_file with min_support=$min_support..."
     python3 "$PY_SCRIPT" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_py.$ext"
 done
