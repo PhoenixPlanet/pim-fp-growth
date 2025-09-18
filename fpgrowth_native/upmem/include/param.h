@@ -21,7 +21,7 @@
 #define MRAM_MAX (64ull << 20)
 #define MRAM_RESERVED (1ull << 20)
 #define MRAM_FP_ARRAY_SZ (16ull << 20)
-#define MRAM_FP_ELEPOS_SZ (1ull << 19)
+#define MRAM_FP_ELEPOS_SZ (1ull << 20)
 
 #define ALIGN_DOWN(BYTES, ALIGN) ((BYTES) - ((BYTES) % (ALIGN)))
 #define MRAM_AVAILABLE ALIGN_DOWN(MRAM_MAX - MRAM_RESERVED, 8)

@@ -76,7 +76,7 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
     std::vector<std::vector<uint32_t>> counts(nr_of_dpus, std::vector<uint32_t>(1, 0));
     std::vector<std::vector<uint32_t>> results(nr_of_dpus, std::vector<uint32_t>(NR_DB_ITEMS * NR_TASKLETS, 0));
 
-    for (int i = 0; i < nr_of_dpus; i++) {
+    for (uint32_t i = 0; i < nr_of_dpus; i++) {
         counts[i][0] = buffers[i].size();
         if (i == 0) {
             if (counts[0][0] % 2 == 1) {
@@ -98,10 +98,10 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
     system.copy(results, DPU_MRAM_HEAP_POINTER_NAME, MRAM_AVAILABLE);
 
     // Reduce results
-    for (int i = 0; i < NR_DB_ITEMS; i++) {
+    for (uint32_t i = 0; i < NR_DB_ITEMS; i++) {
         uint32_t acc = 0;
-        for (int d = 0; d < nr_of_dpus; d++) {
-            for (int t = 0; t < NR_TASKLETS; t++) {
+        for (uint32_t d = 0; d < nr_of_dpus; d++) {
+            for (uint32_t t = 0; t < NR_TASKLETS; t++) {
                 #ifdef PRINT
                 printf("DPU %d, Tasklet %d, Item %d: %u\n", d, t, i, results[d][NR_DB_ITEMS * t + i]);
                 #endif
@@ -136,7 +136,7 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
                 if (buffers[buffer_idx].size() >= MAX_ELEMS) {
                     dpu_count_items(system, buffers);
                     buffer_idx = 0;
-                    for (int i = 0; i < nr_of_dpus; i++) {
+                    for (uint32_t i = 0; i < nr_of_dpus; i++) {
                         buffers[i].clear();
                     }
                 }
@@ -161,7 +161,7 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
         return a.second > b.second;
     });
 
-    for (int i = 0; i < frequent_items.size(); i++) {
+    for (int i = 0; i < (int)frequent_items.size(); i++) {
         _item_priority[frequent_items[i].first] = frequent_items.size() - i;
     }
     

@@ -6,12 +6,13 @@
 #include <string>
 
 int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        printf("Usage: %s <data_file> <min_support>\n", argv[0]);
+    if (argc < 4) {
+        printf("Usage: %s <data_file> <min_support> <output_file>\n", argv[0]);
         return 1;
     }
     std::string db_path = argv[1];
     int min_support = std::stoi(argv[2]);
+    std::string output_file = argv[3];
 
     std::filesystem::path exe_path = std::filesystem::canonical(argv[0]);
     std::filesystem::path upmem_dir = exe_path.parent_path().parent_path(); // Go up from build/ to upmem/
@@ -33,11 +34,13 @@ int main(int argc, char* argv[]) {
     // std::vector<int> prefix_path;
     // fp_tree.mine_pattern(prefix_path, frequent_itemsets);
 
+    // make output file
+    std::ofstream output(output_file);
     for (const auto& itemset : fp_tree.get_frequent_itemsets()) {
         for (int item : itemset) {
-            std::cout << item << " ";
+            output << item << " ";
         }
-        std::cout << std::endl;
+        output << std::endl;
     }
 
     return 0;

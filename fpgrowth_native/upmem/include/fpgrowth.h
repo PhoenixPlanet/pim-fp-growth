@@ -11,8 +11,8 @@
 struct Node {
     uint32_t item;
     uint32_t count;
-    uint32_t depth;
     Node* parent;
+    uint32_t depth;
     std::list<Node*> child;
     Node* next_leaf;
     Node* prev_leaf;
@@ -62,8 +62,8 @@ public:
 
 class FPTree {
 public:
-    FPTree(int min_support, Database* db): _root(new Node(0, 0, nullptr, 0)), _min_support(min_support), _db(db) {}
-    FPTree(int min_support): _root(new Node(0, 0, nullptr, 0)), _min_support(min_support), _db(nullptr) {}
+    FPTree(int min_support, Database* db): _root(new Node(0, 0, nullptr, 0)), _db(db), _min_support(min_support) {}
+    FPTree(int min_support): _root(new Node(0, 0, nullptr, 0)), _db(nullptr), _min_support(min_support) {}
 
     void build_tree();
     void build_fp_array();
@@ -72,8 +72,6 @@ public:
                              std::unordered_map<uint64_t, TempCandidates>& candidate_map);
     std::unordered_map<uint64_t, TempCandidates> mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEntry>& ele_pos);
     void mine_frequent_itemsets();
-    void build_conditional_tree(std::vector<std::pair<std::vector<int>, int>>& pattern_base, int min_support);
-    void mine_pattern(std::vector<int>& prefix_path, std::vector<std::vector<int>>& frequent_itemsets);
     void delete_tree();
 
     std::vector<std::vector<uint32_t>> get_frequent_itemsets() {

@@ -45,6 +45,9 @@ int main() {
 
     int32_t* cache = (int32_t*) mem_alloc(BLOCK_SIZE);
     uint32_t* local_hist = (uint32_t*) mem_alloc(NR_DB_ITEMS * sizeof(uint32_t));
+    for (int i = 0; i < NR_DB_ITEMS; i++) {
+        local_hist[i] = 0;
+    }
     
     for (uint32_t i = id * CACHE_ELEM; i < count; i += elem_stride) {
         uint32_t remaining = (rounded_count > i) ? (rounded_count - i) : 0;
@@ -59,10 +62,10 @@ int main() {
         }
     }
 
-    //mram_write(local_hist, (__mram_ptr void*) (histogram_addr + (NR_DB_ITEMS * id * sizeof(uint32_t))), NR_DB_ITEMS * sizeof(int32_t));
-    for (uint32_t i = 0; i < NR_DB_ITEMS; i += 2) {
-        mram_write(&local_hist[i], (__mram_ptr void *)(histogram_addr + (NR_DB_ITEMS * id + i) * sizeof(uint32_t)), sizeof(uint32_t) * 2);
-    }
+    mram_write(local_hist, (__mram_ptr void*) (histogram_addr + (NR_DB_ITEMS * id * sizeof(uint32_t))), NR_DB_ITEMS * sizeof(int32_t));
+    // for (uint32_t i = 0; i < NR_DB_ITEMS; i += 2) {
+    //     mram_write(&local_hist[i], (__mram_ptr void *)(histogram_addr + (NR_DB_ITEMS * id + i) * sizeof(uint32_t)), sizeof(uint32_t) * 2);
+    // }
 
     barrier_wait(&barrier);
 

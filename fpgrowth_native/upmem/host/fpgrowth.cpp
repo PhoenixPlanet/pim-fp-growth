@@ -53,7 +53,7 @@ void FPTree::build_tree() {
         for (int item : items) {
             bool found = false;
             for (Node* child : current_node->child) {
-                if (child->item == item) {
+                if (int(child->item) == item) {
                     child->count++;
                     current_node = child;
                     found = true;
@@ -166,7 +166,7 @@ void FPTree::dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEn
 
         // TODO: Consider this logic to be moved to the DPU code
         int candidate_start_idx = 0;
-        for (int j = 0; j < distributed.back().size(); ++j) {
+        for (int j = 0; j < (int)distributed.back().size(); ++j) {
             distributed.back()[j].candidate_start_idx = candidate_start_idx;
             if (distributed.back()[j].item == 0) continue;
             candidate_start_idx += _fp_array[distributed.back()[j].pos].depth - 1;
@@ -185,7 +185,6 @@ void FPTree::dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEn
     }
 
     system.copy("k_elepos_size", counts);
-    system.copy(DPU_MRAM_HEAP_POINTER_NAME, _fp_array);
     system.copy(DPU_MRAM_HEAP_POINTER_NAME, MRAM_FP_ARRAY_SZ, distributed);
     system.exec();
 
@@ -212,7 +211,7 @@ std::unordered_map<uint64_t, TempCandidates> FPTree::mine_candidates(dpu::DpuSet
     std::unordered_map<uint64_t, TempCandidates> candidate_map;
     
     int max_elepos = (MRAM_FP_ELEPOS_SZ / sizeof(ElePosEntry)) * nr_of_dpus;
-    for (int partition = 0; partition < ele_pos.size(); partition += max_elepos) {
+    for (int partition = 0; partition < (int)ele_pos.size(); partition += max_elepos) {
         int end = std::min(static_cast<int>(ele_pos.size()), partition + max_elepos);
         std::vector<ElePosEntry> ele_pos_partition(ele_pos.begin() + partition, ele_pos.begin() + end);
 
@@ -226,14 +225,16 @@ void FPTree::mine_frequent_itemsets() {
     try {
         dpu::DpuSet system = dpu::DpuSet::allocate(NR_DPUS, DPU_CONFIG);
         system.load(DPU_MINE_CANDIDATES);
-        printf("DPU program loaded.\n");
+
+        system.copy(DPU_MRAM_HEAP_POINTER_NAME, _fp_array);
+        
         std::vector<ElePosEntry> ele_pos = _k1_ele_pos;
         while (ele_pos.size() > 0) {
             auto candidates = std::move(mine_candidates(system, ele_pos));
 
             std::vector<ElePosEntry> next_ele_pos;
             for (const auto& [key, candidate_set] : candidates) {
-                if (candidate_set.get_support() >= _min_support) {
+                if ((int)candidate_set.get_support() >= _min_support) {
                     if (candidate_set.get_prefix_item() < NR_DB_ITEMS) {
                         _frequent_itemsets_gt1.push_back({candidate_set.get_prefix_item(), candidate_set.get_suffix_item()});
                     } else {
@@ -258,101 +259,6 @@ void FPTree::mine_frequent_itemsets() {
         }
     } catch (const dpu::DpuError& e) {
         std::cerr << "DPU error: " << e.what() << std::endl;
-    }
-}
-
-void FPTree::build_conditional_tree(std::vector<std::pair<std::vector<int>, int>>& pattern_base, int min_support) {
-    std::map<int, int> item_count;
-    for (const auto& transaction : pattern_base) {
-        for (int item : transaction.first) {
-            item_count[item] += transaction.second;
-        }
-    }
-
-    _header_table.clear();
-    for (const auto& [item, count] : item_count) {
-        if (count >= min_support) {
-            HeaderTableEntry entry;
-            entry.item = item;
-            entry.frequency = count;
-            _header_table.push_back(entry);
-        }
-    }
-
-    std::sort(_header_table.begin(), _header_table.end(), [](const auto& a, const auto& b) {
-        return a.frequency > b.frequency;
-    });
-
-
-    for (const auto& [transaction, count] : pattern_base) {
-        std::vector<int> filtered_items;
-        for (int item : transaction) {
-            if (item_count[item] >= min_support) {
-                filtered_items.push_back(item);
-            }
-        }
-
-        std::sort(filtered_items.begin(), filtered_items.end(), [&](int a, int b) {
-            return item_count[a] > item_count[b];
-        });
-
-        Node* current_node = _root;
-        for (int item : filtered_items) {
-            bool found = false;
-            for (Node* child : current_node->child) {
-                if (child->item == item) {
-                    child->count += count;
-                    current_node = child;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                Node* new_node = new Node(item, count, current_node);
-                current_node->child.push_back(new_node);
-                current_node = new_node;
-
-                auto htb_entry = std::find_if(_header_table.begin(), _header_table.end(),
-                    [&](const HeaderTableEntry& entry) {
-                        return entry.item == item;
-                    });
-                if (htb_entry != _header_table.end()) {
-                    htb_entry->node_link.push_back(new_node);
-                } else {
-                    std::cerr << "Error: Item not found in header table: " << item << std::endl;
-                }
-            }
-        }
-    }
-}
-
-void FPTree::mine_pattern(std::vector<int>& prefix_path, std::vector<std::vector<int>>& frequent_itemsets) {
-    for (const auto& entry : _header_table) {
-        int item = entry.item;
-        std::vector<int> new_prefix_path = prefix_path;
-        new_prefix_path.push_back(item);
-        frequent_itemsets.push_back(new_prefix_path);
-
-        std::vector<std::pair<std::vector<int>, int>> conditional_pattern_base;
-
-        for (Node* node : entry.node_link) {
-            Node* current = node->parent;
-            std::vector<int> path;
-            while (current != nullptr && current->item != -1) {
-                path.push_back(current->item);
-                current = current->parent;
-            }
-
-            if (!path.empty()) {
-                std::reverse(path.begin(), path.end());
-                conditional_pattern_base.push_back({path, node->count});
-            }
-        }
-        if (!conditional_pattern_base.empty()) {
-            FPTree conditional_tree(_min_support);
-            conditional_tree.build_conditional_tree(conditional_pattern_base, _min_support);
-            conditional_tree.mine_pattern(new_prefix_path, frequent_itemsets);
-        }
     }
 }
 

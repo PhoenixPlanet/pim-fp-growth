@@ -12,11 +12,11 @@ DPU_SRC = db_count_item.c mine_candidates.c
 ######################################################
 
 HOST_CC = g++
-HOST_CFLAGS = -g
+HOST_CFLAGS = -O2 -std=gnu++17 -Wall -Wextra -Werror -pthread
 HOST_LDFLAGS = `dpu-pkg-config --cflags --libs dpu`
 
 DPU_CC = dpu-upmem-dpurte-clang
-DPU_CFLAGS = -O0 -g -DNR_TASKLETS=16 -DSTACK_SIZE_DEFAULT=256
+DPU_CFLAGS = -O2 -DNR_TASKLETS=16 -DSTACK_SIZE_DEFAULT=256
 
 HOST_BIN = build/$(TARGET)
 DPU_BIN = $(addprefix build/, $(basename $(DPU_SRC)))
