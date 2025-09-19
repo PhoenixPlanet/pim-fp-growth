@@ -19,6 +19,7 @@ BARRIER_INIT(barrier, NR_TASKLETS);
 __host uint32_t count; // TODO: Consider copy this value before use (tasklet-safe?)
 
 int main() {
+    //Initialization
     const sysname_t id = me();
 
     if (id == 0) {
@@ -48,7 +49,7 @@ int main() {
     for (int i = 0; i < NR_DB_ITEMS; i++) {
         local_hist[i] = 0;
     }
-    
+    //Count Items
     for (uint32_t i = id * CACHE_ELEM; i < count; i += elem_stride) {
         uint32_t remaining = (rounded_count > i) ? (rounded_count - i) : 0;
         uint32_t take_elems = (remaining > CACHE_ELEM) ? CACHE_ELEM : remaining;
@@ -61,7 +62,7 @@ int main() {
             local_hist[cache[k]] += 1u;
         }
     }
-
+    //Write Histogram
     mram_write(local_hist, (__mram_ptr void*) (histogram_addr + (NR_DB_ITEMS * id * sizeof(uint32_t))), NR_DB_ITEMS * sizeof(int32_t));
     // for (uint32_t i = 0; i < NR_DB_ITEMS; i += 2) {
     //     mram_write(&local_hist[i], (__mram_ptr void *)(histogram_addr + (NR_DB_ITEMS * id + i) * sizeof(uint32_t)), sizeof(uint32_t) * 2);
