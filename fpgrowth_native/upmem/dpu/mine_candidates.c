@@ -158,7 +158,7 @@ int main() {
         candidate_entry_t candidate;
         elepos_entry_t entry;
         fp_array_entry_t fp_item;
-
+        //Read ElePos Entry
         get_k_elepos_item(i, &entry);
         if (entry.item == 0) {
             continue; // Skip if item is 0 (root)
@@ -169,6 +169,7 @@ int main() {
         
         int candidate_idx = 0;
         while (fp_item.item != 0) {
+            //Create candidate itemsets
             candidate.prefix_item = entry.item;
             candidate.suffix_item = fp_item.item;
             candidate.suffix_item_pos = suffix_idx;

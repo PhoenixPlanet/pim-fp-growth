@@ -143,167 +143,116 @@ void FPTree::build_fp_array() {
 
 void FPTree::build_k1_ele_pos() {
     _k1_ele_pos.clear();
-
-    // Group by item and aggregate support
-    std::unordered_map<uint32_t, uint32_t> item_support;
-    std::unordered_map<uint32_t, uint32_t> item_first_pos;
     
     for (uint32_t i = 0; i < _fp_array.size(); ++i) {
         const FPArrayEntry& entry = _fp_array[i];
-        if (entry.item == 0) continue; // Skip root nodes
-        
-        if (item_support.find(entry.item) == item_support.end()) {
-            item_first_pos[entry.item] = i;
-            item_support[entry.item] = 0;
-        }
-        item_support[entry.item] += entry.support;
+        _k1_ele_pos.push_back(ElePosEntry {entry.item, i, entry.support, 0});
     }
+}
+
+void FPTree::cpu_mine_candidates(const std::vector<ElePosEntry>& ele_pos, 
+                                 std::unordered_map<uint64_t, TempCandidates>& candidate_map) {
+    // Distribute ElePos across Threads (Divide Ele Pos into chunks)
+    std::vector<std::vector<ElePosEntry>> distributed;
+    int quotent = ele_pos.size() / NR_THREADS;
+    int remainder = ele_pos.size() % NR_THREADS;
     
-    // Create K1 elements only for items that meet min_support
-    for (const auto& [item, total_support] : item_support) {
-        if (total_support >= _min_support) {
-            _k1_ele_pos.push_back(ElePosEntry {
-                item, 
-                item_first_pos[item], 
-                total_support, 
-                0
-            });
+    int max_candidates = 0;
+    std::vector<int> candidate_cnts(NR_THREADS, 0);
+    for (int i = 0; i < NR_THREADS; ++i) {
+        int start = i * quotent + std::min(i, remainder);
+        int end = start + quotent + (i < remainder ? 1 : 0);
+        distributed.push_back(std::vector<ElePosEntry>(ele_pos.begin() + start, ele_pos.begin() + end));
+
+        // TODO: Consider this logic to be moved to the DPU code
+        int candidate_start_idx = 0;
+        for (int j = 0; j < (int)distributed.back().size(); ++j) {
+            distributed.back()[j].candidate_start_idx = candidate_start_idx;
+            if (distributed.back()[j].item == 0) continue;
+            candidate_start_idx += _fp_array[distributed.back()[j].pos].depth - 1;
+        }
+        candidate_cnts[i] = candidate_start_idx;
+        max_candidates = std::max(max_candidates, candidate_start_idx);
+    }
+
+    std::vector<std::vector<uint32_t>> counts(NR_THREADS, std::vector<uint32_t>(1, 0));
+    for (int i = 0; i < NR_THREADS; ++i) {
+        counts[i][0] = distributed[i].size();
+        int padding = distributed[0].size() - distributed[i].size();
+        if (padding > 0) {
+            distributed[i].resize(distributed[i].size() + padding, {0, 0, 0, 0}); // Pad with zeros
+        }
+    }
+
+    std::thread threads[NR_THREADS];
+    std::vector<std::vector<CandidateEntry>> candidates(NR_THREADS, std::vector<CandidateEntry>(max_candidates));
+    for (int i = 0; i < NR_THREADS; ++i) {
+        threads[i] = std::thread(mine_candidates_worker, i, NR_THREADS, std::ref(distributed[i]), std::ref(_fp_array), std::ref(candidates[i]));
+    }
+    for (int i = 0; i < NR_THREADS; ++i) {
+        threads[i].join();
+    }
+
+    //Merge Candidates
+    for (int i = 0; i < NR_THREADS; ++i) {
+        for (int j = 0; j < candidate_cnts[i]; ++j) {
+            const CandidateEntry& candidate = candidates[i][j];
+            if (candidate.suffix_item == 0) continue; // Skip root item
+            uint64_t key = (static_cast<uint64_t>(candidate.prefix_item) << 32) | candidate.suffix_item;
+            
+            if (candidate_map.find(key) == candidate_map.end()) {
+                candidate_map[key] = TempCandidates(candidate);
+            } else {
+                candidate_map[key].add_candidate(candidate);
+            }
         }
     }
 }
 
-void FPTree::cpu_mine_candidates(const std::vector<ElePosEntry>& ele_pos, std::unordered_map<uint64_t, CandidateEntry>& candidate_map) {
-    int num_threads = std::thread::hardware_concurrency();
-    if (num_threads == 0) num_threads = 4;
-    std::vector<CandidateEntry> candidates;
-    ::cpu_mine_candidates(ele_pos, _fp_array, candidates, num_threads);
-    for (const auto& candidate : candidates) {
-        if (candidate.suffix_item == 0) continue; // Skip root item
-        uint64_t key = (static_cast<uint64_t>(candidate.prefix_item) << 32) | candidate.suffix_item;
-        if (candidate_map.find(key) == candidate_map.end()) {
-            candidate_map[key] = candidate;
-        } else {
-            candidate_map[key].support += candidate.support;
-        }
+std::unordered_map<uint64_t, TempCandidates> FPTree::mine_candidates(const std::vector<ElePosEntry>& ele_pos) {
+    std::unordered_map<uint64_t, TempCandidates> candidate_map;
+    
+    int max_elepos = (MRAM_FP_ELEPOS_SZ / sizeof(ElePosEntry)) * NR_THREADS;
+    //Partition ElePos if too large
+    for (int partition = 0; partition < (int)ele_pos.size(); partition += max_elepos) {
+        int end = std::min(static_cast<int>(ele_pos.size()), partition + max_elepos);
+        std::vector<ElePosEntry> ele_pos_partition(ele_pos.begin() + partition, ele_pos.begin() + end);
+        cpu_mine_candidates(ele_pos_partition, candidate_map);
     }
-}
 
-std::unordered_map<uint64_t, CandidateEntry> FPTree::mine_candidates(const std::vector<ElePosEntry>& ele_pos) {
-    std::unordered_map<uint64_t, CandidateEntry> candidate_map;
-    cpu_mine_candidates(ele_pos, candidate_map);
     return candidate_map;
 }
 
 void FPTree::mine_frequent_itemsets() {
-    // Use traditional FP-Growth approach - mine patterns recursively
-    std::vector<std::vector<int>> all_frequent_itemsets;
-    std::vector<int> empty_prefix;
-    mine_pattern(empty_prefix, all_frequent_itemsets);
-    
-    // Convert to the expected format and add to _frequent_itemsets_gt1
-    for (const auto& itemset : all_frequent_itemsets) {
-        std::vector<uint32_t> uint_itemset;
-        for (int item : itemset) {
-            uint_itemset.push_back(static_cast<uint32_t>(item));
-        }
-        _frequent_itemsets_gt1.push_back(uint_itemset);
-    }
-}
-
-void FPTree::build_conditional_tree(std::vector<std::pair<std::vector<int>, int>>& pattern_base, int min_support) {
-    std::map<int, int> item_count;
-    for (const auto& transaction : pattern_base) {
-        for (int item : transaction.first) {
-            item_count[item] += transaction.second;
-        }
-    }
-
-    _header_table.clear();
-    for (const auto& [item, count] : item_count) {
-        if (count >= min_support) {
-            HeaderTableEntry entry;
-            entry.item = item;
-            entry.frequency = count;
-            _header_table.push_back(entry);
-        }
-    }
-
-    std::sort(_header_table.begin(), _header_table.end(), [](const auto& a, const auto& b) {
-        return a.frequency > b.frequency;
-    });
-
-
-    for (const auto& [transaction, count] : pattern_base) {
-        std::vector<int> filtered_items;
-        for (int item : transaction) {
-            if (item_count[item] >= min_support) {
-                filtered_items.push_back(item);
-            }
-        }
-
-        std::sort(filtered_items.begin(), filtered_items.end(), [&](int a, int b) {
-            return item_count[a] > item_count[b];
-        });
-
-        Node* current_node = _root;
-        for (int item : filtered_items) {
-            bool found = false;
-            for (Node* child : current_node->child) {
-                if (child->item == item) {
-                    child->count += count;
-                    current_node = child;
-                    found = true;
-                    break;
+     std::vector<ElePosEntry> ele_pos = _k1_ele_pos;
+        while (ele_pos.size() > 0) {
+            //Mine Candidate
+            auto candidates = std::move(mine_candidates(ele_pos));
+            std::vector<ElePosEntry> next_ele_pos;
+            for (const auto& [key, candidate_set] : candidates) {
+                if ((int)candidate_set.get_support() >= _min_support) {
+                    //Save K+1 Frequent Itemset
+                    if (candidate_set.get_prefix_item() < NR_DB_ITEMS) {
+                        _frequent_itemsets_gt1.push_back({candidate_set.get_prefix_item(), candidate_set.get_suffix_item()});
+                    } else {
+                        const auto& prefix = _frequent_itemsets_gt1[candidate_set.get_prefix_item() - NR_DB_ITEMS];
+                        std::vector<uint32_t> itemset(prefix.begin(), prefix.end());
+                        itemset.push_back(candidate_set.get_suffix_item());
+                        _frequent_itemsets_gt1.push_back(itemset);
+                    }
+                    //Create K+1 ElePos
+                    uint32_t itemset_id = _itemset_id++;
+                    for (const auto& candidate : candidate_set.candidates) {
+                        next_ele_pos.push_back(ElePosEntry {
+                            itemset_id,
+                            candidate.suffix_item_pos,
+                            candidate.support,
+                            0
+                        });
+                    }
                 }
             }
-            if (!found) {
-                Node* new_node = new Node(item, count, current_node);
-                current_node->child.push_back(new_node);
-                current_node = new_node;
-
-                auto htb_entry = std::find_if(_header_table.begin(), _header_table.end(),
-                    [&](const HeaderTableEntry& entry) {
-                        return entry.item == item;
-                    });
-                if (htb_entry != _header_table.end()) {
-                    htb_entry->node_link.push_back(new_node);
-                } else {
-                    std::cerr << "Error: Item not found in header table: " << item << std::endl;
-                }
-            }
-        }
-    }
-}
-
-void FPTree::mine_pattern(std::vector<int>& prefix_path, std::vector<std::vector<int>>& frequent_itemsets) {
-    for (const auto& entry : _header_table) {
-        int item = entry.item;
-        std::vector<int> new_prefix_path = prefix_path;
-        new_prefix_path.push_back(item);
-        frequent_itemsets.push_back(new_prefix_path);
-
-        std::vector<std::pair<std::vector<int>, int>> conditional_pattern_base;
-
-        for (Node* node : entry.node_link) {
-            Node* current = node->parent;
-            std::vector<int> path;
-            while (current != nullptr && current->item != 0) {  // Fixed: root item is 0, not -1
-                path.push_back(current->item);
-                current = current->parent;
-            }
-
-            if (!path.empty()) {
-                std::reverse(path.begin(), path.end());
-                conditional_pattern_base.push_back({path, node->count});
-            }
-        }
-        if (!conditional_pattern_base.empty()) {
-            FPTree conditional_tree(_min_support);
-            conditional_tree.build_conditional_tree(conditional_pattern_base, _min_support);
-            if (!conditional_tree._header_table.empty()) {  // Only mine if there are frequent items
-                conditional_tree.mine_pattern(new_prefix_path, frequent_itemsets);
-            }
-        }
+            ele_pos = std::move(next_ele_pos);
     }
 }
 

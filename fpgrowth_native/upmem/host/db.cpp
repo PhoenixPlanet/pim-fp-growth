@@ -72,6 +72,7 @@ void Database::seek_to_start() {
 }
 
 void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int32_t>>& buffers) {
+    //Initalize and Prepare DPU
     uint32_t nr_of_dpus = system.dpus().size();
     std::vector<std::vector<uint32_t>> counts(nr_of_dpus, std::vector<uint32_t>(1, 0));
     std::vector<std::vector<uint32_t>> results(nr_of_dpus, std::vector<uint32_t>(NR_DB_ITEMS * NR_TASKLETS, 0));
@@ -92,12 +93,12 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
 
     system.copy(DPU_MRAM_HEAP_POINTER_NAME, buffers);
     system.copy("count", counts);
-
+    //Go to DPU (/dpu/db_count_item.c)
     system.exec();
 
     system.copy(results, DPU_MRAM_HEAP_POINTER_NAME, MRAM_AVAILABLE);
 
-    // Reduce results
+    // Merge Histograms from all DPUs
     for (uint32_t i = 0; i < NR_DB_ITEMS; i++) {
         uint32_t acc = 0;
         for (uint32_t d = 0; d < nr_of_dpus; d++) {
@@ -113,6 +114,7 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
 }
 
 std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_support) {
+    //Initalize and Prepare DPU
     _min_support = min_support;
 
     _item_count.resize(NR_DB_ITEMS, 0);
@@ -129,10 +131,12 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
 
         int buffer_idx = 0;
         std::string line;
+        //Read Transaction
         while (std::getline(_file, line)) {
             std::istringstream iss(line);
             int item;
             while (iss >> item) {
+                //Full Buffer
                 if (buffers[buffer_idx].size() >= MAX_ELEMS) {
                     dpu_count_items(system, buffers);
                     buffer_idx = 0;
@@ -144,6 +148,7 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
                 buffer_idx = (buffer_idx + 1) % nr_of_dpus;
             }
         }
+        //Transaction End, Process Remaining Buffers
         if (buffers[0].size() > 0) {
             dpu_count_items(system, buffers);
         }

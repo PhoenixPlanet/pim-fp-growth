@@ -27,6 +27,39 @@ struct HeaderTableEntry {
     std::list<Node*> node_link;
 };
 
+struct TempCandidates {
+private:
+    uint32_t support;
+    uint32_t prefix_item;
+    uint32_t suffix_item;
+
+public:
+    std::vector<CandidateEntry> candidates;
+
+    TempCandidates() : support(0), prefix_item(0), suffix_item(0) {}
+
+    TempCandidates(CandidateEntry first): support(first.support), prefix_item(first.prefix_item), suffix_item(first.suffix_item) {
+        candidates.push_back(first);
+    }
+
+    void add_candidate(const CandidateEntry& candidate) {
+        candidates.push_back(candidate);
+        support += candidate.support;
+    }
+
+    uint32_t get_support() const {
+        return support;
+    }
+
+    uint32_t get_prefix_item() const {
+        return prefix_item;
+    }
+
+    uint32_t get_suffix_item() const {
+        return suffix_item;
+    }
+};
+
 class FPTree {
 public:
     FPTree(int min_support, Database* db): _root(new Node(0, 0, nullptr, 0)), _min_support(min_support), _db(db) {}
@@ -35,11 +68,10 @@ public:
     void build_tree();
     void build_fp_array();
     void build_k1_ele_pos();
-    void cpu_mine_candidates(const std::vector<ElePosEntry>& ele_pos, std::unordered_map<uint64_t, CandidateEntry>& candidate_map);
-    std::unordered_map<uint64_t, CandidateEntry> mine_candidates(const std::vector<ElePosEntry>& ele_pos);
+    void cpu_mine_candidates(const std::vector<ElePosEntry>& ele_pos, 
+                                 std::unordered_map<uint64_t, TempCandidates>& candidate_map);
     void mine_frequent_itemsets();
-    void build_conditional_tree(std::vector<std::pair<std::vector<int>, int>>& pattern_base, int min_support);
-    void mine_pattern(std::vector<int>& prefix_path, std::vector<std::vector<int>>& frequent_itemsets);
+    std::unordered_map<uint64_t, TempCandidates> mine_candidates(const std::vector<ElePosEntry>& ele_pos);
     void delete_tree();
 
     std::vector<std::vector<uint32_t>> get_frequent_itemsets() {
