@@ -5,6 +5,8 @@
 #include <filesystem>
 #include <string>
 
+#include "timer.h"
+
 int main(int argc, char* argv[]) {
     if (argc < 4) {
         printf("Usage: %s <data_file> <min_support> <output_file>\n", argv[0]);
@@ -42,6 +44,8 @@ int main(int argc, char* argv[]) {
         }
         output << std::endl;
     }
+
+    Timer::instance().print_records();
 
     return 0;
 }

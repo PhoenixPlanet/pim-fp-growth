@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "param.h"
+#include "timer.h"
 
 #define MAX_ELEMS (MRAM_TRX_ARRAY_SZ / sizeof(int32_t))
 
@@ -75,7 +76,7 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
     uint32_t nr_of_dpus = system.dpus().size();
     std::vector<std::vector<uint32_t>> counts(nr_of_dpus, std::vector<uint32_t>(1, 0));
     std::vector<std::vector<uint32_t>> results(nr_of_dpus, std::vector<uint32_t>(NR_DB_ITEMS, 0));
-
+    
     for (uint32_t i = 0; i < nr_of_dpus; i++) {
         counts[i][0] = buffers[i].size();
         if (i == 0) {
@@ -90,12 +91,18 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
         }
     }
 
+    Timer::instance().start("Count Items - Transfer");
     system.copy(DPU_MRAM_HEAP_POINTER_NAME, buffers);
     system.copy("count", counts);
+    Timer::instance().stop();
 
+    Timer::instance().start("Count Items - Exec");
     system.exec();
+    Timer::instance().stop();
 
+    Timer::instance().start("Count Items - Transfer Back");
     system.copy(results, DPU_MRAM_HEAP_POINTER_NAME, MRAM_TRX_ARRAY_SZ);
+    Timer::instance().stop();
 
     // Reduce results
     for (uint32_t d = 0; d < nr_of_dpus; d++) {
@@ -114,20 +121,25 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
     seek_to_start();
     
     try {
+        Timer::instance().start("Count Items - DPU Init");
         auto system = dpu::DpuSet::allocate(NR_DPUS, DPU_CONFIG);
         system.load(DPU_DB_COUNT_ITEM);
+        Timer::instance().stop();
         
         uint32_t nr_of_dpus = system.dpus().size();
         std::vector<std::vector<int32_t>> buffers(nr_of_dpus, std::vector<int32_t>());
 
         int buffer_idx = 0;
         std::string line;
+        Timer::instance().start("Count Items - Prepare");
         while (std::getline(_file, line)) {
             std::istringstream iss(line);
             int item;
             while (iss >> item) {
                 if (buffers[buffer_idx].size() >= MAX_ELEMS) {
+                    Timer::instance().stop();
                     dpu_count_items(system, buffers);
+                    Timer::instance().start("Count Items - Prepare");
                     buffer_idx = 0;
                     for (uint32_t i = 0; i < nr_of_dpus; i++) {
                         buffers[i].clear();
@@ -137,6 +149,7 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
                 buffer_idx = (buffer_idx + 1) % nr_of_dpus;
             }
         }
+        Timer::instance().stop();
         if (buffers[0].size() > 0) {
             dpu_count_items(system, buffers);
         }
