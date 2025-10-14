@@ -55,11 +55,11 @@ make clean
 make
 cd ..
 
-echo "Building upmem C++ project..."
-cd upmem_hist
-make clean
-make
-cd ..
+# echo "Building upmem C++ project..."
+# cd upmem_hist
+# make clean
+# make
+# cd ..
 
 # Warm-up phase: Test all executables with a simple test case
 echo "=========================================="
@@ -95,13 +95,13 @@ else
     echo "✗ PFP Growth C++ executable not found"
 fi
 
-# Test upmem C++ executable
-echo "Warming up upmem C++ executable..."
-if [ -f "$UPMEM_EXE" ]; then
-    sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$UPMEM_EXE" "$INPUT_DIR/test.txt" "2" "$OUTPUT_DIR/test.txt" > /dev/null 2>&1
-else
-    echo "✗ UpMem C++ executable not found"
-fi
+# # Test upmem C++ executable
+# echo "Warming up upmem C++ executable..."
+# if [ -f "$UPMEM_EXE" ]; then
+#     sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$UPMEM_EXE" "$INPUT_DIR/test.txt" "2" "$OUTPUT_DIR/test.txt" > /dev/null 2>&1
+# else
+#     echo "✗ UpMem C++ executable not found"
+# fi
 
 # Test Python script
 echo "Warming up Python script..."
@@ -128,10 +128,6 @@ for input_file in "$INPUT_DIR"/*; do
     input_name=$(basename "$input_file")
     base_name="${input_name%.*}"
     ext="${input_name##*.}"
-for input_file in "$INPUT_DIR"/*; do
-    input_name=$(basename "$input_file")
-    base_name="${input_name%.*}"
-    ext="${input_name##*.}"
     
     # Get min_support values for this dataset
     min_support_list=${min_supports[$input_name]}
@@ -144,39 +140,24 @@ for input_file in "$INPUT_DIR"/*; do
         echo "=========================================="
         echo "Testing $input_name with min_support=$min_support"
         echo "=========================================="
-    # Test with each min_support value
-    for min_support in $min_support_list; do
-        echo "=========================================="
-        echo "Testing $input_name with min_support=$min_support"
-        echo "=========================================="
     
         echo "Running original C++ on $input_file with min_support=$min_support..."
         start_time=$(date +%s.%N)
         sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$ORIGINAL_EXE" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_ms${min_support}_org.$ext"
         end_time=$(date +%s.%N)
         original_time=$(echo "$end_time - $start_time" | bc)
-        echo "Running original C++ on $input_file with min_support=$min_support..."
-        start_time=$(date +%s.%N)
-        sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$ORIGINAL_EXE" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_ms${min_support}_org.$ext"
-        end_time=$(date +%s.%N)
-        original_time=$(echo "$end_time - $start_time" | bc)
         
         echo "Running pfp_growth C++ on $input_file with min_support=$min_support..."
         start_time=$(date +%s.%N)
         sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$PFP_EXE" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_ms${min_support}_pfp.$ext"
         end_time=$(date +%s.%N)
         pfp_time=$(echo "$end_time - $start_time" | bc)
-        echo "Running pfp_growth C++ on $input_file with min_support=$min_support..."
-        start_time=$(date +%s.%N)
-        sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$PFP_EXE" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_ms${min_support}_pfp.$ext"
-        end_time=$(date +%s.%N)
-        pfp_time=$(echo "$end_time - $start_time" | bc)
         
-        echo "Running upmem C++ on $input_file with min_support=$min_support..."
-        start_time=$(date +%s.%N)
-        sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$UPMEM_EXE" "$input_file" "$min_support" "$OUTPUT_DIR/${base_name}_ms${min_support}_upmem.$ext"
-        end_time=$(date +%s.%N)
-        upmem_time=$(echo "$end_time - $start_time" | bc)
+        # echo "Running upmem C++ on $input_file with min_support=$min_support..."
+        # start_time=$(date +%s.%N)
+        # sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$UPMEM_EXE" "$input_file" "$min_support" "$OUTPUT_DIR/${base_name}_ms${min_support}_upmem.$ext"
+        # end_time=$(date +%s.%N)
+        # upmem_time=$(echo "$end_time - $start_time" | bc)
         
         # Check if Python output already exists
         python_output_file="$OUTPUT_DIR/${base_name}_ms${min_support}_py.$ext"

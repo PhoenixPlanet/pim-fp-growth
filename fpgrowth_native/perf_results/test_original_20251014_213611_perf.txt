@@ -1,0 +1,27 @@
+# started on Tue Oct 14 21:36:11 2025
+
+
+ Performance counter stats for 'original/fpgrowth input/test.txt 2':
+
+                 0      cycles                                                                  (76.08%)
+         1,711,599      instructions                                                            (88.23%)
+           250,222      cache-references                                                      
+            95,983      cache-misses                     #   38.36% of all cache refs         
+           726,224      branch-instructions                                                   
+            20,501      branch-misses                    #    2.82% of all branches           
+               128      page-faults                                                           
+                 0      context-switches                                                      
+                 0      cpu-migrations                                                        
+     <not counted>      L1-dcache-loads                                                         (0.00%)
+     <not counted>      L1-dcache-load-misses                                                   (0.00%)
+   <not supported>      LLC-loads                                                             
+   <not supported>      LLC-load-misses                                                       
+     <not counted>      dTLB-loads                                                              (0.00%)
+     <not counted>      dTLB-load-misses                                                        (0.00%)
+
+       0.008769888 seconds time elapsed
+
+       0.002215000 seconds user
+       0.006604000 seconds sys
+
+

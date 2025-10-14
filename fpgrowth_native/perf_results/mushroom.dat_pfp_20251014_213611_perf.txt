@@ -1,0 +1,27 @@
+# started on Tue Oct 14 21:36:11 2025
+
+
+ Performance counter stats for 'pfp_growth/fpgrowth_cpu input/mushroom.dat.txt 1600':
+
+     9,175,861,496      cycles                                                                  (54.80%)
+     7,873,928,860      instructions                     #    0.86  insn per cycle              (63.70%)
+       241,265,513      cache-references                                                        (62.68%)
+       146,299,126      cache-misses                     #   60.64% of all cache refs           (62.82%)
+     1,122,948,855      branch-instructions                                                     (63.06%)
+         9,703,040      branch-misses                    #    0.86% of all branches             (62.79%)
+           156,301      page-faults                                                           
+               253      context-switches                                                      
+               263      cpu-migrations                                                        
+     2,529,586,017      L1-dcache-loads                                                         (42.68%)
+       159,817,886      L1-dcache-load-misses            #    6.32% of all L1-dcache accesses   (44.82%)
+   <not supported>      LLC-loads                                                             
+   <not supported>      LLC-load-misses                                                       
+     2,355,679,072      dTLB-loads                                                              (44.63%)
+         2,623,370      dTLB-load-misses                 #    0.11% of all dTLB cache accesses  (44.66%)
+
+       2.814224204 seconds time elapsed
+
+       2.468675000 seconds user
+       0.465148000 seconds sys
+
+

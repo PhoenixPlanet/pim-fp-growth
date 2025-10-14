@@ -30,6 +30,7 @@ public:
 
     void build_tree();
     void build_conditional_tree(std::vector<std::pair<std::vector<int>, int>>& pattern_base, int min_support);
+    void build_conditional_tree(std::vector<std::pair<std::vector<int>, int>>& pattern_base, int min_support, const std::map<int, int>& global_order);
     void mine_pattern(std::vector<int>& prefix_path, std::vector<std::vector<int>>& frequent_itemsets);
     void delete_tree();
 
@@ -38,6 +39,7 @@ private:
     Database* _db;
     int _min_support;
     std::vector<HeaderTableEntry> _header_table;
+    std::map<int, int> _global_item_order;  // Maps item -> order (lower is more frequent)
 
     void delete_tree(Node* node);
 };
