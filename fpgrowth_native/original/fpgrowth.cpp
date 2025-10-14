@@ -1,5 +1,8 @@
 #include "fpgrowth.h"
 #include <algorithm>
+#include <climits>
+
+#include "timer.h"
 
 void print_tree(Node* node, int depth = 0) {
     for (int i = 0; i < depth; ++i) std::cout << "  ";
@@ -15,7 +18,11 @@ void print_tree(Node* node, int depth = 0) {
 }
 
 void FPTree::build_tree() {
+    Timer::instance().start("Scan for freq items");
     std::vector<std::pair<int, int>> frequent_items = _db->scan_for_frequent_items(_min_support);
+    Timer::instance().stop();
+
+    Timer::instance().start("Build FP-Tree");
     std::sort(frequent_items.begin(), frequent_items.end(), [](const auto& a, const auto& b) {
         return a.second > b.second;
     });
@@ -27,8 +34,13 @@ void FPTree::build_tree() {
         entry.frequency = item.second;
         _header_table.push_back(entry);
     }
+    Timer::instance().stop();
 
+    Timer::instance().start("Build FP-Tree - Filter & Sort");
     std::vector<std::vector<int>> transactions = _db->get_all_filtered_transactions();
+    Timer::instance().stop();
+
+    Timer::instance().start("Build FP-Tree");
     for (const auto& items : transactions) {
         Node* current_node = _root;
         for (int item : items) {
@@ -56,6 +68,33 @@ void FPTree::build_tree() {
             }
         }
     }
+    Timer::instance().stop();
+
+    // count the number of nodes in the tree
+    // int node_count = 0;
+    // std::function<void(Node*)> count_nodes = [&](Node* node) {
+    //     node_count++;
+    //     for (Node* child : node->child) {
+    //         count_nodes(child);
+    //     }
+    // };
+    // count_nodes(_root);
+    // std::cout << "FP-Tree has " << node_count << " nodes." << std::endl;
+
+    // find the max depth of the tree
+    // int max_depth = 0;
+    // std::function<void(Node*, int)> find_max_depth = [&](Node* node, int depth) {
+    //     if (node->child.empty()) {
+    //         if (depth > max_depth) {
+    //             max_depth = depth;
+    //         }
+    //     }
+    //     for (Node* child : node->child) {
+    //         find_max_depth(child, depth + 1);
+    //     }
+    // };
+    // find_max_depth(_root, 1);
+    // std::cout << "FP-Tree max depth: " << max_depth << std::endl;
 }
 
 void FPTree::build_conditional_tree(std::vector<std::pair<std::vector<int>, int>>& pattern_base, int min_support) {
@@ -124,8 +163,50 @@ void FPTree::build_conditional_tree(std::vector<std::pair<std::vector<int>, int>
 }
 
 void FPTree::mine_pattern(std::vector<int>& prefix_path, std::vector<std::vector<int>>& frequent_itemsets) {
-    // Process header table in forward order (most frequent to least frequent)
-    for (const auto& entry : _header_table) {
+    bool is_single_path = true;
+    Node* current = _root;
+    while (!current->child.empty()) {
+        if (current->child.size() > 1) {
+            is_single_path = false;
+            break;
+        }
+        current = current->child.front();
+    }
+
+    if (is_single_path) {
+        std::vector<int> single_path;
+        std::vector<int> single_path_counts;  // 추가: 각 노드의 count 저장
+        Node* node = _root;
+        while (!node->child.empty()) {
+            node = node->child.front();
+            single_path.push_back(node->item);
+            single_path_counts.push_back(node->count);  // count 저장
+        }
+
+        int path_size = single_path.size();
+        int combinations = (1 << path_size) - 1;
+        for (int i = 1; i <= combinations; ++i) {
+            std::vector<int> new_pattern = prefix_path;
+            int min_count = INT_MAX;  // 조합의 최소 지원도
+            
+            for (int j = 0; j < path_size; ++j) {
+                if (i & (1 << j)) {
+                    new_pattern.push_back(single_path[j]);
+                    min_count = std::min(min_count, single_path_counts[j]);
+                }
+            }
+            
+            // 최소 지원도를 만족하는 경우만 추가
+            if (min_count >= _min_support) {
+                frequent_itemsets.push_back(new_pattern);
+            }
+        }
+        return;
+    }
+
+    for (auto it = _header_table.rbegin(); it != _header_table.rend(); ++it) {
+        const HeaderTableEntry& entry = *it;
+
         int item = entry.item;
         std::vector<int> new_prefix_path = prefix_path;
         new_prefix_path.push_back(item);

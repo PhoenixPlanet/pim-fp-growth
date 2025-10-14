@@ -56,10 +56,15 @@ public:
     }
 
     void print_records() const {
+        int64_t total_ns = 0;
         for (const auto& record : records) {
             std::cout << std::setw(30) << std::left << record.first
                       << ": " << std::setw(10) << std::right << record.second.duration_ns << " ns" << std::endl;
+            total_ns += record.second.duration_ns;
         }
+
+        std::cout << std::setw(30) << std::left << "Total"
+                  << ": " << std::setw(10) << std::right << total_ns << " ns" << std::endl;
     }
 
 private:

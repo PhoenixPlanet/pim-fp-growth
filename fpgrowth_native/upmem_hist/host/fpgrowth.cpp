@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "param.h"
+#include "timer.h"
 
 void print_tree(Node* node, int depth = 0) {
     for (int i = 0; i < depth; ++i) std::cout << "  ";
@@ -25,6 +26,7 @@ void print_tree(Node* node, int depth = 0) {
 
 void FPTree::build_tree() {
     std::vector<std::pair<int, int>> frequent_items = _db->scan_for_frequent_items(_min_support);
+    Timer::instance().start("Build FP-Tree");
     std::sort(frequent_items.begin(), frequent_items.end(), [](const auto& a, const auto& b) {
         return a.second > b.second;
     });
@@ -32,6 +34,7 @@ void FPTree::build_tree() {
     _frequent_itemsets_1.clear();
     for (const auto& item : frequent_items) {
         _frequent_itemsets_1.push_back({static_cast<uint32_t>(item.first)});
+        //std::cout << "Frequent Item: " << item.first << " (support: " << item.second << ")" << std::endl;
     }
 
     _header_table.clear();
@@ -44,7 +47,13 @@ void FPTree::build_tree() {
 
     _db->seek_to_start();
     _leaf_head = nullptr;
+    Timer::instance().stop();
+
+    Timer::instance().start("Build FP-Tree - Filter & Sort");
     std::deque<std::vector<int>> items_list = _db->filtered_items();
+    Timer::instance().stop();
+
+    Timer::instance().start("Build FP-Tree");
     while (items_list.size() > 0) {
         std::vector<int> items = items_list.front();
         items_list.pop_front();
@@ -109,6 +118,7 @@ void FPTree::build_tree() {
             }
         }
     }
+    Timer::instance().stop();
 }
 
 void FPTree::build_fp_array() {
@@ -137,6 +147,9 @@ void FPTree::build_fp_array() {
         }
         target_leaf = target_leaf->next_leaf;
     }
+
+    //std::cout << "FP-Array has " << _fp_array.size() << " nodes." << std::endl;
+    //std::cout << "FP-Array size: " << _fp_array.size() * sizeof(FPArrayEntry) / 1024.0 << " KB" << std::endl;
 }
 
 void FPTree::build_k1_ele_pos() {
@@ -150,9 +163,11 @@ void FPTree::build_k1_ele_pos() {
 
 void FPTree::dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEntry>& ele_pos, 
                                  std::unordered_map<uint64_t, TempCandidates>& candidate_map) {
+    Timer::instance().start("Mine Freq Items - Preprocess");
     int nr_of_dpus = system.dpus().size();
 
     // Distribute ElePos across DPUs
+    std::cout << "ElePos size: " << ele_pos.size() * sizeof(ElePosEntry) / 1024.0 << " KB, distributing across " << nr_of_dpus << " DPUs." << std::endl;
     std::vector<std::vector<ElePosEntry>> distributed;
     int quotent = ele_pos.size() / nr_of_dpus;
     int remainder = ele_pos.size() % nr_of_dpus;
@@ -183,14 +198,23 @@ void FPTree::dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEn
             distributed[i].resize(distributed[i].size() + padding, {0, 0, 0, 0}); // Pad with zeros
         }
     }
+    Timer::instance().stop();
 
+    Timer::instance().start("Mine Freq Items - Transfer kElePos(To DPU)");
     system.copy("k_elepos_size", counts);
     system.copy(DPU_MRAM_HEAP_POINTER_NAME, MRAM_FP_ARRAY_SZ, distributed);
-    system.exec();
+    Timer::instance().stop();
 
+    Timer::instance().start("Mine Freq Items - Exec");
+    system.exec();
+    Timer::instance().stop();
+
+    Timer::instance().start("Mine Freq Items - Transfer Candidates(To CPU)");
     std::vector<std::vector<CandidateEntry>> candidates(nr_of_dpus, std::vector<CandidateEntry>(max_candidates));
     system.copy(candidates, DPU_MRAM_HEAP_POINTER_NAME, MRAM_FP_ARRAY_SZ + MRAM_FP_ELEPOS_SZ);
+    Timer::instance().stop();
 
+    Timer::instance().start("Mine Freq Items - Postprocess");
     for (int i = 0; i < nr_of_dpus; ++i) {
         for (int j = 0; j < candidate_cnts[i]; ++j) {
             const CandidateEntry& candidate = candidates[i][j];
@@ -204,6 +228,7 @@ void FPTree::dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEn
             }
         }
     }
+    Timer::instance().stop();
 }
 
 std::unordered_map<uint64_t, TempCandidates> FPTree::mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEntry>& ele_pos) {
@@ -224,14 +249,19 @@ std::unordered_map<uint64_t, TempCandidates> FPTree::mine_candidates(dpu::DpuSet
 void FPTree::mine_frequent_itemsets() {
     try {
         dpu::DpuSet system = dpu::DpuSet::allocate(NR_DPUS, DPU_CONFIG);
+        Timer::instance().start("Mine Freq Items - DPU Load");
         system.load(DPU_MINE_CANDIDATES);
+        Timer::instance().stop();
 
+        Timer::instance().start("Mine Freq Items - Transfer FP Array(To DPU)");
         system.copy(DPU_MRAM_HEAP_POINTER_NAME, _fp_array);
+        Timer::instance().stop();
 
         std::vector<ElePosEntry> ele_pos = _k1_ele_pos;
         while (ele_pos.size() > 0) {
             auto candidates = std::move(mine_candidates(system, ele_pos));
 
+            Timer::instance().start("Mine Freq Items - Merge Results");
             std::vector<ElePosEntry> next_ele_pos;
             for (const auto& [key, candidate_set] : candidates) {
                 if ((int)candidate_set.get_support() >= _min_support) {
@@ -256,6 +286,7 @@ void FPTree::mine_frequent_itemsets() {
                 }
             }
             ele_pos.swap(next_ele_pos);
+            Timer::instance().stop();
         }
     } catch (const dpu::DpuError& e) {
         std::cerr << "DPU error: " << e.what() << std::endl;

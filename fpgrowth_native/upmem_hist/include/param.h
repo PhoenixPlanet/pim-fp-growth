@@ -3,7 +3,7 @@
 
 // PIM
 #ifndef NR_DPUS
-#define NR_DPUS 64
+#define NR_DPUS 1024
 #endif
 #ifndef NR_TASKLETS
 #define NR_TASKLETS 16
@@ -21,7 +21,7 @@
 #define MRAM_MAX (64ull << 20)
 #define MRAM_TRX_ARRAY_RESERVED (1ull << 20)
 #define MRAM_FP_ARRAY_SZ (16ull << 20)
-#define MRAM_FP_ELEPOS_SZ (1ull << 20)
+#define MRAM_FP_ELEPOS_SZ (4ull << 20)
 
 #define ALIGN_DOWN(BYTES, ALIGN) ((BYTES) - ((BYTES) % (ALIGN)))
 #define MRAM_TRX_ARRAY_SZ ALIGN_DOWN(MRAM_MAX - MRAM_TRX_ARRAY_RESERVED, 8)
@@ -30,7 +30,7 @@
 #define NR_DB_ITEMS (1024) // Should be a power of 2
 #endif
 
-#define DPU_CONFIG "backend=simulator"
+#define DPU_CONFIG "backend=hw"
 
 #define NR_THREADS 4
 

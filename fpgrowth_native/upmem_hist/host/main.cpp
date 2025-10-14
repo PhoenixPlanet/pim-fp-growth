@@ -27,9 +27,19 @@ int main(int argc, char* argv[]) {
     Database db(db_path.c_str()); 
 
     FPTree fp_tree(min_support, &db);
+
+    //Timer::instance().start("Build FP-Tree");
     fp_tree.build_tree();
+    //Timer::instance().stop();
+
+    Timer::instance().start("Build FP-Array");
     fp_tree.build_fp_array();
+    Timer::instance().stop();
+
+    Timer::instance().start("Build K1 ElePos");
     fp_tree.build_k1_ele_pos();
+    Timer::instance().stop();
+    
     fp_tree.mine_frequent_itemsets();
 
     // std::vector<std::vector<int>> frequent_itemsets;

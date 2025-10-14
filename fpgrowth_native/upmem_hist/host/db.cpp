@@ -91,7 +91,7 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
         }
     }
 
-    Timer::instance().start("Count Items - Transfer");
+    Timer::instance().start("Count Items - Transfer(To DPU)");
     system.copy(DPU_MRAM_HEAP_POINTER_NAME, buffers);
     system.copy("count", counts);
     Timer::instance().stop();
@@ -100,7 +100,7 @@ void Database::dpu_count_items(dpu::DpuSet& system, std::vector<std::vector<int3
     system.exec();
     Timer::instance().stop();
 
-    Timer::instance().start("Count Items - Transfer Back");
+    Timer::instance().start("Count Items - Transfer Histogram(To CPU)");
     system.copy(results, DPU_MRAM_HEAP_POINTER_NAME, MRAM_TRX_ARRAY_SZ);
     Timer::instance().stop();
 
@@ -175,7 +175,7 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
 }
 
 std::deque<std::vector<int>> Database::filtered_items() {
-
+/** Multithreaded version of filtered_items
     std::vector<std::deque<std::vector<int>>> all_results(NR_THREADS);
     std::vector<std::pair<std::streampos, std::streampos>> parts = divide_file(_file, NR_THREADS);
     std::vector<std::thread> threads;
@@ -209,6 +209,26 @@ std::deque<std::vector<int>> Database::filtered_items() {
     std::deque<std::vector<int>> results;
     for (const auto& result : all_results) {
         results.insert(results.end(), result.begin(), result.end());
+    }
+*/
+
+    std::string line;
+    std::deque<std::vector<int>> results;
+    while (std::getline(_file, line)) {
+        std::istringstream iss(line);
+        std::vector<int> items;
+        int item;
+        while (iss >> item) {
+            if (_item_count[item] >= _min_support) {
+                items.push_back(item);
+            }
+        }
+        if (!items.empty()) {
+            std::sort(items.begin(), items.end(), [this](int a, int b) {
+                return _item_count[a] > _item_count[b];
+            });
+            results.push_back(items);
+        }
     }
 
     #ifdef PRINT

@@ -4,9 +4,11 @@
 #include <vector>
 #include <string>
 
+#include "timer.h"
+
 int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        std::cout << "Usage: " << argv[0] << " <data_file> <min_support>" << std::endl;
+    if (argc < 4) {
+        std::cout << "Usage: " << argv[0] << " <data_file> <min_support> <output_file>" << std::endl;
         return 1;
     }
     std::string db_path = argv[1];
@@ -18,14 +20,21 @@ int main(int argc, char* argv[]) {
 
     std::vector<std::vector<int>> frequent_itemsets;
     std::vector<int> prefix_path;
-    fp_tree.mine_pattern(prefix_path, frequent_itemsets);
 
+    Timer::instance().start("Mine Patterns");
+    fp_tree.mine_pattern(prefix_path, frequent_itemsets);
+    Timer::instance().stop();
+
+    std::string output_file = argv[3];
+    std::ofstream output(output_file);
     for (const auto& itemset : frequent_itemsets) {
         for (int item : itemset) {
-            std::cout << item << " ";
+            output << item << " ";
         }
-        std::cout << std::endl;
+        output << std::endl;
     }
+
+    Timer::instance().print_records();
 
     return 0;
 }
