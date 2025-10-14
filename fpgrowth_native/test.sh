@@ -6,7 +6,7 @@ INPUT_DIR="input"
 OUTPUT_DIR="output"
 ORIGINAL_EXE="original/fpgrowth"
 PFP_EXE="pfp_growth/fpgrowth_cpu"
-UPMEM_EXE="upmem/build/main"
+UPMEM_EXE="upmem_hist/build/main"
 PY_SCRIPT="python/fp_growth.py"
 VENV_DIR="python/venv"
 
@@ -56,15 +56,9 @@ make
 cd ..
 
 echo "Building upmem C++ project..."
-cd upmem
-if command -v dpu-pkg-config &> /dev/null; then
-    make clean
-    make
-    echo "UPMEM build successful"
-else
-    echo "Warning: DPU development environment not found. Skipping UPMEM build."
-    echo "To build UPMEM components, install the UPMEM SDK first."
-fi
+cd upmem_hist
+make clean
+make
 cd ..
 
 # Warm-up phase: Test all executables with a simple test case
@@ -83,7 +77,8 @@ fi
 echo "Warming up original C++ executable..."
 if [ -f "$ORIGINAL_EXE" ]; then
     start_time=$(date +%s.%N)
-    "$ORIGINAL_EXE" "$INPUT_DIR/test.txt" "2" > "$OUTPUT_DIR/original_test.txt"
+    # sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$ORIGINAL_EXE" "input_later/T40I10D100K.dat" "800" > output/T40I10D100K.dat.txt
+    sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$ORIGINAL_EXE" "$INPUT_DIR/test.txt" "2" > /dev/null 2>&1
     end_time=$(date +%s.%N)
     original_time=$(echo "$end_time - $start_time" | bc)
     echo "  Original C++: ${original_time}s"
@@ -100,13 +95,13 @@ else
     echo "✗ PFP Growth C++ executable not found"
 fi
 
-# # Test upmem C++ executable
-# echo "Warming up upmem C++ executable..."
-# if [ -f "$UPMEM_EXE" ]; then
-#     sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$UPMEM_EXE" "$INPUT_DIR/test.txt" "2" "$OUTPUT_DIR/test.txt" > /dev/null 2>&1
-# else
-#     echo "✗ UpMem C++ executable not found"
-# fi
+# Test upmem C++ executable
+echo "Warming up upmem C++ executable..."
+if [ -f "$UPMEM_EXE" ]; then
+    sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$UPMEM_EXE" "$INPUT_DIR/test.txt" "2" "$OUTPUT_DIR/test.txt" > /dev/null 2>&1
+else
+    echo "✗ UpMem C++ executable not found"
+fi
 
 # Test Python script
 echo "Warming up Python script..."
@@ -133,6 +128,10 @@ for input_file in "$INPUT_DIR"/*; do
     input_name=$(basename "$input_file")
     base_name="${input_name%.*}"
     ext="${input_name##*.}"
+for input_file in "$INPUT_DIR"/*; do
+    input_name=$(basename "$input_file")
+    base_name="${input_name%.*}"
+    ext="${input_name##*.}"
     
     # Get min_support values for this dataset
     min_support_list=${min_supports[$input_name]}
@@ -145,7 +144,17 @@ for input_file in "$INPUT_DIR"/*; do
         echo "=========================================="
         echo "Testing $input_name with min_support=$min_support"
         echo "=========================================="
+    # Test with each min_support value
+    for min_support in $min_support_list; do
+        echo "=========================================="
+        echo "Testing $input_name with min_support=$min_support"
+        echo "=========================================="
     
+        echo "Running original C++ on $input_file with min_support=$min_support..."
+        start_time=$(date +%s.%N)
+        sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$ORIGINAL_EXE" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_ms${min_support}_org.$ext"
+        end_time=$(date +%s.%N)
+        original_time=$(echo "$end_time - $start_time" | bc)
         echo "Running original C++ on $input_file with min_support=$min_support..."
         start_time=$(date +%s.%N)
         sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$ORIGINAL_EXE" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_ms${min_support}_org.$ext"
@@ -157,12 +166,17 @@ for input_file in "$INPUT_DIR"/*; do
         sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$PFP_EXE" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_ms${min_support}_pfp.$ext"
         end_time=$(date +%s.%N)
         pfp_time=$(echo "$end_time - $start_time" | bc)
+        echo "Running pfp_growth C++ on $input_file with min_support=$min_support..."
+        start_time=$(date +%s.%N)
+        sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$PFP_EXE" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_ms${min_support}_pfp.$ext"
+        end_time=$(date +%s.%N)
+        pfp_time=$(echo "$end_time - $start_time" | bc)
         
-#         echo "Running upmem C++ on $input_file with min_support=$min_support..."
-#         start_time=$(date +%s.%N)
-#         sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$UPMEM_EXE" "$input_file" "$min_support" "$OUTPUT_DIR/${base_name}_ms${min_support}_upmem.$ext"
-#         end_time=$(date +%s.%N)
-#         upmem_time=$(echo "$end_time - $start_time" | bc)
+        echo "Running upmem C++ on $input_file with min_support=$min_support..."
+        start_time=$(date +%s.%N)
+        sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$UPMEM_EXE" "$input_file" "$min_support" "$OUTPUT_DIR/${base_name}_ms${min_support}_upmem.$ext"
+        end_time=$(date +%s.%N)
+        upmem_time=$(echo "$end_time - $start_time" | bc)
         
         # Check if Python output already exists
         python_output_file="$OUTPUT_DIR/${base_name}_ms${min_support}_py.$ext"
