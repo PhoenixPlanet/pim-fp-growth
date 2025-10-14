@@ -17,7 +17,7 @@ struct Node {
     Node* next_leaf;
     Node* prev_leaf;
 
-    Node(uint32_t item, uint32_t count, Node* parent, uint32_t depth): item(item), count(count), parent(parent), depth(depth) {}
+    Node(uint32_t item, uint32_t count, Node* parent, uint32_t depth): item(item), count(count), parent(parent), depth(depth), next_leaf(nullptr), prev_leaf(nullptr) {}
     Node(uint32_t item, uint32_t count, Node* parent): Node(item, count, parent, parent ? parent->depth + 1 : 0) {}
 };
 
@@ -62,8 +62,24 @@ public:
 
 class FPTree {
 public:
-    FPTree(int min_support, Database* db): _root(new Node(0, 0, nullptr, 0)), _min_support(min_support), _db(db) {}
-    FPTree(int min_support): _root(new Node(0, 0, nullptr, 0)), _min_support(min_support), _db(nullptr) {}
+    FPTree(int min_support, Database* db): _root(new Node(0, 0, nullptr, 0)), _leaf_head(nullptr), _min_support(min_support), _db(db), _itemset_id(NR_DB_ITEMS) {}
+    FPTree(int min_support): _root(new Node(0, 0, nullptr, 0)), _leaf_head(nullptr), _min_support(min_support), _db(nullptr), _itemset_id(NR_DB_ITEMS) {}
+    ~FPTree() {
+        // Clear header table to avoid dangling pointers
+        for (auto& entry : _header_table) {
+            entry.node_link.clear();
+        }
+        _header_table.clear();
+        
+        // Reset leaf pointers
+        _leaf_head = nullptr;
+        
+        // Delete the tree
+        if (_root) {
+            delete_tree(_root);
+            _root = nullptr;
+        }
+    }
 
     void build_tree();
     void build_fp_array();
