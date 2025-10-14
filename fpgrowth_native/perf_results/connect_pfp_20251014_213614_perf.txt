@@ -1,0 +1,27 @@
+# started on Tue Oct 14 21:36:15 2025
+
+
+ Performance counter stats for 'pfp_growth/fpgrowth_cpu input/connect.txt 58000':
+
+     7,753,778,611      cycles                                                                  (51.99%)
+     7,906,829,765      instructions                     #    1.02  insn per cycle              (61.55%)
+       124,128,470      cache-references                                                        (61.18%)
+        70,473,238      cache-misses                     #   56.77% of all cache refs           (61.59%)
+     1,274,840,966      branch-instructions                                                     (61.77%)
+         8,207,143      branch-misses                    #    0.64% of all branches             (61.63%)
+            48,791      page-faults                                                           
+               235      context-switches                                                      
+                89      cpu-migrations                                                        
+     2,443,414,973      L1-dcache-loads                                                         (41.28%)
+        83,011,528      L1-dcache-load-misses            #    3.40% of all L1-dcache accesses   (41.57%)
+   <not supported>      LLC-loads                                                             
+   <not supported>      LLC-load-misses                                                       
+     2,387,102,148      dTLB-loads                                                              (41.67%)
+         2,061,464      dTLB-load-misses                 #    0.09% of all dTLB cache accesses  (41.73%)
+
+       1.912173128 seconds time elapsed
+
+       1.984413000 seconds user
+       0.316226000 seconds sys
+
+

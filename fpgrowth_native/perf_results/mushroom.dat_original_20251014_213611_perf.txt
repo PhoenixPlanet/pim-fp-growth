@@ -1,0 +1,27 @@
+# started on Tue Oct 14 21:36:11 2025
+
+
+ Performance counter stats for 'original/fpgrowth input/mushroom.dat.txt 1600':
+
+     1,117,975,305      cycles                                                                  (49.51%)
+     1,471,651,904      instructions                     #    1.32  insn per cycle              (59.70%)
+        10,100,222      cache-references                                                        (59.97%)
+         2,284,729      cache-misses                     #   22.62% of all cache refs           (60.30%)
+       269,019,676      branch-instructions                                                     (60.57%)
+         3,104,337      branch-misses                    #    1.15% of all branches             (60.56%)
+             2,995      page-faults                                                           
+                 2      context-switches                                                      
+                 1      cpu-migrations                                                        
+       426,701,048      L1-dcache-loads                                                         (40.03%)
+         9,022,855      L1-dcache-load-misses            #    2.11% of all L1-dcache accesses   (39.70%)
+   <not supported>      LLC-loads                                                             
+   <not supported>      LLC-load-misses                                                       
+       421,076,669      dTLB-loads                                                              (39.43%)
+           114,779      dTLB-load-misses                 #    0.03% of all dTLB cache accesses  (39.44%)
+
+       0.305034009 seconds time elapsed
+
+       0.237964000 seconds user
+       0.067016000 seconds sys
+
+

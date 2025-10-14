@@ -257,9 +257,19 @@ void FPTree::mine_frequent_itemsets() {
 }
 
 void FPTree::delete_tree(Node* node) {
-    for (Node* child : node->child) {
+    if (!node) return;
+    
+    // Delete all children first
+    while (!node->child.empty()) {
+        Node* child = node->child.front();
+        node->child.pop_front();
         delete_tree(child);
     }
+    
+    // Clear the child list to be safe
+    node->child.clear();
+    
+    // Delete the node itself
     delete node;
 }
 

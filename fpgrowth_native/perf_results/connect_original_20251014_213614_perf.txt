@@ -1,0 +1,27 @@
+# started on Tue Oct 14 21:36:14 2025
+
+
+ Performance counter stats for 'original/fpgrowth input/connect.txt 58000':
+
+     4,546,482,859      cycles                                                                  (49.95%)
+     6,776,529,241      instructions                     #    1.49  insn per cycle              (59.97%)
+        28,219,505      cache-references                                                        (59.94%)
+         7,502,370      cache-misses                     #   26.59% of all cache refs           (59.94%)
+     1,282,563,259      branch-instructions                                                     (59.93%)
+         6,442,210      branch-misses                    #    0.50% of all branches             (59.98%)
+             6,732      page-faults                                                           
+                 6      context-switches                                                      
+                 1      cpu-migrations                                                        
+     2,157,172,100      L1-dcache-loads                                                         (40.06%)
+        26,017,958      L1-dcache-load-misses            #    1.21% of all L1-dcache accesses   (40.06%)
+   <not supported>      LLC-loads                                                             
+   <not supported>      LLC-load-misses                                                       
+     2,133,928,124      dTLB-loads                                                              (40.07%)
+           355,857      dTLB-load-misses                 #    0.02% of all dTLB cache accesses  (40.02%)
+
+       1.229009597 seconds time elapsed
+
+       1.064863000 seconds user
+       0.163883000 seconds sys
+
+

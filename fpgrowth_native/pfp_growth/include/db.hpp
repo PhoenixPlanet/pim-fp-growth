@@ -23,6 +23,12 @@ public:
         }
     }
 
+    ~Database() {
+        if (_file.is_open()) {
+            _file.close();
+        }
+    }
+
     void seek_to_start();
     std::vector<std::pair<int, int>> scan_for_frequent_items(int min_support);
     std::deque<std::vector<int>> filtered_items();

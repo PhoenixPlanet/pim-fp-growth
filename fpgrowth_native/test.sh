@@ -34,8 +34,13 @@ fi
 # Activate virtual environment and install requirements
 echo "Activating virtual environment and installing requirements..."
 source "$VENV_DIR/bin/activate"
-pip install --upgrade pip
-pip install -r python/requirements.txt
+"$VENV_DIR/bin/pip" install --upgrade pip
+"$VENV_DIR/bin/pip" install -r python/requirements.txt
+
+# Function to run Python with virtual environment
+run_python() {
+    "$VENV_DIR/bin/python" "$@"
+}
 
 # Build all projects
 echo "Building original C++ project..."
@@ -50,11 +55,11 @@ make clean
 make
 cd ..
 
-echo "Building upmem C++ project..."
-cd upmem_hist
-make clean
-make
-cd ..
+# echo "Building upmem C++ project..."
+# cd upmem_hist
+# make clean
+# make
+# cd ..
 
 # Warm-up phase: Test all executables with a simple test case
 echo "=========================================="
@@ -148,20 +153,25 @@ for input_file in "$INPUT_DIR"/*; do
         # end_time=$(date +%s.%N)
         # pfp_time=$(echo "$end_time - $start_time" | bc)
         
-        echo "Running upmem C++ on $input_file with min_support=$min_support..."
-        start_time=$(date +%s.%N)
-        sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$UPMEM_EXE" "$input_file" "$min_support" "$OUTPUT_DIR/${base_name}_ms${min_support}_upmem.$ext"
-        end_time=$(date +%s.%N)
-        upmem_time=$(echo "$end_time - $start_time" | bc)
+        # echo "Running upmem C++ on $input_file with min_support=$min_support..."
+        # start_time=$(date +%s.%N)
+        # sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$UPMEM_EXE" "$input_file" "$min_support" "$OUTPUT_DIR/${base_name}_ms${min_support}_upmem.$ext"
+        # end_time=$(date +%s.%N)
+        # upmem_time=$(echo "$end_time - $start_time" | bc)
         
-        # Skip Python for mushroom dataset with min_support=1600
-        if [[ "$input_name" == "mushroom.dat.txt" && "$min_support" == "1600" ]]; then
-            echo "Skipping Python execution for mushroom.dat.txt with min_support=1600..."
+        # Check if Python output already exists
+        python_output_file="$OUTPUT_DIR/${base_name}_ms${min_support}_py.$ext"
+        if [ -f "$python_output_file" ]; then
+            echo "Python output already exists, skipping execution for $input_name with min_support=$min_support..."
+            python_time="(cached)"
+        elif [[ "$input_name" == "mushroom.dat.txt" && "$min_support" == "1600" ]]; then
+            # Skip Python for mushroom dataset with min_support=1600 (too slow)
+            echo "Skipping Python execution for mushroom.dat.txt with min_support=1600 (too slow)..."
             python_time="N/A"
         else
             echo "Running Python on $input_file with min_support=$min_support..."
             start_time=$(date +%s.%N)
-            python3 "$PY_SCRIPT" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_ms${min_support}_py.$ext"
+            python3 "$PY_SCRIPT" "$input_file" "$min_support" > "$python_output_file"
             end_time=$(date +%s.%N)
             python_time=$(echo "$end_time - $start_time" | bc)
         fi

@@ -28,11 +28,14 @@ void FPTree::build_tree() {
     });
 
     _header_table.clear();
+    _global_item_order.clear();
+    int order = 0;
     for (const auto& item : frequent_items) {
         HeaderTableEntry entry;
         entry.item = item.first;
         entry.frequency = item.second;
         _header_table.push_back(entry);
+        _global_item_order[item.first] = order++;  // Store global order
     }
     Timer::instance().stop();
 
@@ -95,6 +98,86 @@ void FPTree::build_tree() {
     // };
     // find_max_depth(_root, 1);
     // std::cout << "FP-Tree max depth: " << max_depth << std::endl;
+}
+
+void FPTree::build_conditional_tree(std::vector<std::pair<std::vector<int>, int>>& pattern_base, int min_support, const std::map<int, int>& global_order) {
+    std::map<int, int> item_count;
+    for (const auto& transaction : pattern_base) {
+        for (int item : transaction.first) {
+            item_count[item] += transaction.second;
+        }
+    }
+
+    _header_table.clear();
+    for (const auto& [item, count] : item_count) {
+        if (count >= min_support) {
+            HeaderTableEntry entry;
+            entry.item = item;
+            entry.frequency = count;
+            _header_table.push_back(entry);
+        }
+    }
+
+    // Sort by global order to maintain consistency across conditional trees
+    std::sort(_header_table.begin(), _header_table.end(), [&global_order](const auto& a, const auto& b) {
+        auto it_a = global_order.find(a.item);
+        auto it_b = global_order.find(b.item);
+        if (it_a != global_order.end() && it_b != global_order.end()) {
+            return it_a->second < it_b->second;  // Lower order = more frequent
+        }
+        // Fallback to frequency if not in global order
+        return a.frequency > b.frequency;
+    });
+
+    // Store the global order for recursive calls
+    _global_item_order = global_order;
+
+    for (const auto& [transaction, count] : pattern_base) {
+        std::vector<int> filtered_items;
+        for (int item : transaction) {
+            if (item_count[item] >= min_support) {
+                filtered_items.push_back(item);
+            }
+        }
+
+        // Sort by global order
+        std::sort(filtered_items.begin(), filtered_items.end(), [&global_order](int a, int b) {
+            auto it_a = global_order.find(a);
+            auto it_b = global_order.find(b);
+            if (it_a != global_order.end() && it_b != global_order.end()) {
+                return it_a->second < it_b->second;
+            }
+            return a < b;  // Fallback
+        });
+
+        Node* current_node = _root;
+        for (int item : filtered_items) {
+            bool found = false;
+            for (Node* child : current_node->child) {
+                if (child->item == item) {
+                    child->count += count;
+                    current_node = child;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                Node* new_node = new Node(item, count, current_node);
+                current_node->child.push_back(new_node);
+                current_node = new_node;
+
+                auto htb_entry = std::find_if(_header_table.begin(), _header_table.end(),
+                    [&](const HeaderTableEntry& entry) {
+                        return entry.item == item;
+                    });
+                if (htb_entry != _header_table.end()) {
+                    htb_entry->node_link.push_back(new_node);
+                } else {
+                    std::cerr << "Error: Item not found in header table: " << item << std::endl;
+                }
+            }
+        }
+    }
 }
 
 void FPTree::build_conditional_tree(std::vector<std::pair<std::vector<int>, int>>& pattern_base, int min_support) {
@@ -229,7 +312,7 @@ void FPTree::mine_pattern(std::vector<int>& prefix_path, std::vector<std::vector
         }
         if (!conditional_pattern_base.empty()) {
             FPTree conditional_tree(_min_support);
-            conditional_tree.build_conditional_tree(conditional_pattern_base, _min_support);
+            conditional_tree.build_conditional_tree(conditional_pattern_base, _min_support, _global_item_order);
             conditional_tree.mine_pattern(new_prefix_path, frequent_itemsets);
         }
     }
