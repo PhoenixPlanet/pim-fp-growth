@@ -55,11 +55,11 @@ make clean
 make
 cd ..
 
-# echo "Building upmem C++ project..."
-# cd upmem_hist
-# make clean
-# make
-# cd ..
+echo "Building upmem C++ project..."
+cd upmem_hist
+make clean
+make
+cd ..
 
 # Warm-up phase: Test all executables with a simple test case
 echo "=========================================="
@@ -90,7 +90,7 @@ echo "----------------------------------------"
 # Test pfp_growth C++ executable
 echo "Warming up pfp_growth C++ executable..."
 if [ -f "$PFP_EXE" ]; then
-    sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$PFP_EXE" "$INPUT_DIR/test.txt" "2" > /dev/null 2>&1
+    sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$PFP_EXE" "$INPUT_DIR/test.txt" "2" "$OUTPUT_DIR/test.txt"
 else
     echo "✗ PFP Growth C++ executable not found"
 fi
@@ -119,7 +119,8 @@ declare -A min_supports
 min_supports["test.txt"]="2 3 4"
 min_supports["DataSetA_norm.txt"]="1500 1400 1300"
 min_supports["mushroom.dat.txt"]="3200 2500 1600"
-min_supports["connect.txt"]="50000 58000"
+#min_supports["connect.txt"]="50000 58000"
+min_supports["connect.txt"]="60000"
 
 echo "Starting main test phase..."
 echo "=========================================="
@@ -147,24 +148,24 @@ for input_file in "$INPUT_DIR"/*; do
         end_time=$(date +%s.%N)
         original_time=$(echo "$end_time - $start_time" | bc)
         
-        # echo "Running pfp_growth C++ on $input_file with min_support=$min_support..."
-        # start_time=$(date +%s.%N)
-        # sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$PFP_EXE" "$input_file" "$min_support" > "$OUTPUT_DIR/${base_name}_ms${min_support}_pfp.$ext"
-        # end_time=$(date +%s.%N)
-        # pfp_time=$(echo "$end_time - $start_time" | bc)
+        echo "Running pfp_growth C++ on $input_file with min_support=$min_support..."
+        start_time=$(date +%s.%N)
+        sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$PFP_EXE" "$input_file" "$min_support" "$OUTPUT_DIR/${base_name}_ms${min_support}_pfp.$ext"
+        end_time=$(date +%s.%N)
+        pfp_time=$(echo "$end_time - $start_time" | bc)
         
-        # echo "Running upmem C++ on $input_file with min_support=$min_support..."
-        # start_time=$(date +%s.%N)
-        # sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$UPMEM_EXE" "$input_file" "$min_support" "$OUTPUT_DIR/${base_name}_ms${min_support}_upmem.$ext"
-        # end_time=$(date +%s.%N)
-        # upmem_time=$(echo "$end_time - $start_time" | bc)
+        echo "Running upmem C++ on $input_file with min_support=$min_support..."
+        start_time=$(date +%s.%N)
+        sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH "$UPMEM_EXE" "$input_file" "$min_support" "$OUTPUT_DIR/${base_name}_ms${min_support}_upmem.$ext"
+        end_time=$(date +%s.%N)
+        upmem_time=$(echo "$end_time - $start_time" | bc)
         
         # Check if Python output already exists
         python_output_file="$OUTPUT_DIR/${base_name}_ms${min_support}_py.$ext"
         if [ -f "$python_output_file" ]; then
             echo "Python output already exists, skipping execution for $input_name with min_support=$min_support..."
             python_time="(cached)"
-        elif [[ "$input_name" == "mushroom.dat.txt" && "$min_support" == "1600" ]]; then
+        elif [[ ( "$input_name" == "mushroom.dat.txt" && "$min_support" == "1600" ) || "$input_name" == "connect.txt" ]]; then
             # Skip Python for mushroom dataset with min_support=1600 (too slow)
             echo "Skipping Python execution for mushroom.dat.txt with min_support=1600 (too slow)..."
             python_time="N/A"
@@ -178,7 +179,7 @@ for input_file in "$INPUT_DIR"/*; do
         
         echo "--- Execution Summary for $input_name (min_support=$min_support) ---"
         echo "  Original C++: ${original_time}s"
-        # echo "  PFP Growth C++: ${pfp_time}s"
+        echo "  PFP Growth C++: ${pfp_time}s"
         echo "  UpMem C++: ${upmem_time}s"
         echo "  Python: ${python_time}s"
         echo "----------------------------------------"

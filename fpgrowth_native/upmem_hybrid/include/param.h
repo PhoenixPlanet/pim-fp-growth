@@ -3,7 +3,7 @@
 
 // PIM
 #ifndef NR_DPUS
-#define NR_DPUS 64
+#define NR_DPUS 1024
 #endif
 #ifndef NR_TASKLETS
 #define NR_TASKLETS 16
@@ -30,8 +30,9 @@
 #define NR_DB_ITEMS (1024) // Should be a power of 2
 #endif
 
-#define DPU_CONFIG "backend=simulator"
+#define DPU_CONFIG "backend=hw"
 
-#define NR_THREADS 4
+#define NR_THREADS (4)
+#define NR_GROUPS (8)
 
 #endif

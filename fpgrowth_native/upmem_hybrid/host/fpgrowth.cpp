@@ -121,30 +121,72 @@ void FPTree::build_tree() {
 }
 
 void FPTree::build_fp_array() {
-    std::map<Node*, int> item_idx_table;
-    _fp_array.clear();
+    std::unordered_map<Node*, int> global_item_idx_table;
+    _global_fp_array.clear();
+
+    std::vector<std::unordered_map<Node*, int>> local_item_idx_tables(NR_GROUPS);
+    _local_fp_arrays.clear();
+    _local_fp_arrays.resize(NR_GROUPS);
 
     Node* target_leaf = _leaf_head;
+    int idx = 0;
     while (target_leaf) {
         Node* current = target_leaf;
-        _fp_array.push_back(FPArrayEntry {current->item, -1, current->count, current->depth});
+        int group_id = idx % NR_GROUPS;
+
+        std::vector<FPArrayEntry>& local_fp_array = _local_fp_arrays[group_id];
+        std::unordered_map<Node*, int>& local_item_idx_table = local_item_idx_tables[group_id];
+
+        _global_fp_array.push_back(GlobalFPArrayEntry {FPArrayEntry {current->item, -1, current->count, current->depth}, current});
+        local_fp_array.push_back(FPArrayEntry {current->item, -1, current->count, current->depth});
+
+        _node_to_groups[current].push_back({group_id, (int)local_fp_array.size() - 1});
+
+        bool global_finished = false;
+        bool local_finished = false;
+
         while (current) {
             if (current->item == 0) break;
 
             Node* parent = current->parent;
-            FPArrayEntry& last_entry = _fp_array.back();
-            if (item_idx_table.find(parent) != item_idx_table.end()) {
-                last_entry.parent_pos = item_idx_table[parent];
+            FPArrayEntry& global_last_entry = _global_fp_array.back().entry;
+            if (global_item_idx_table.find(parent) != global_item_idx_table.end()) {
+                global_last_entry.parent_pos = global_item_idx_table[parent];
+                global_finished = true;
+            }
+
+            FPArrayEntry& local_last_entry = local_fp_array.back();
+            if (local_item_idx_table.find(parent) != local_item_idx_table.end()) {
+                local_last_entry.parent_pos = local_item_idx_table[parent];
+                local_finished = true;
+            }
+
+            if (global_finished && local_finished) {
                 break;
             }
 
-            item_idx_table[parent] = _fp_array.size();
-            last_entry.parent_pos = item_idx_table[parent];
+            if (!global_finished) {
+                int global_pos = _global_fp_array.size();
+                global_item_idx_table[parent] = global_pos;
+                global_last_entry.parent_pos = global_pos;
 
-            _fp_array.push_back({parent->item, -1, parent->count, parent->depth});
+                _global_fp_array.push_back(GlobalFPArrayEntry {FPArrayEntry {parent->item, -1, parent->count, parent->depth}, parent});
+            }
+
+            if (!local_finished) {
+                int local_pos = local_fp_array.size();
+                local_item_idx_table[parent] = local_pos;
+                local_last_entry.parent_pos = local_pos;
+
+                local_fp_array.push_back(FPArrayEntry {parent->item, -1, parent->count, parent->depth});
+                _node_to_groups[parent].push_back({group_id, local_pos});
+            }
+
             current = parent;
         }
+
         target_leaf = target_leaf->next_leaf;
+        idx++;
     }
 
     //std::cout << "FP-Array has " << _fp_array.size() << " nodes." << std::endl;
@@ -152,11 +194,15 @@ void FPTree::build_fp_array() {
 }
 
 void FPTree::build_k1_ele_pos() {
-    _k1_ele_pos.clear();
+    _local_k1_elepos_lists.clear();
+    _local_k1_elepos_lists.resize(NR_GROUPS);
 
-    for (uint32_t i = 0; i < _fp_array.size(); ++i) {
-        const FPArrayEntry& entry = _fp_array[i];
-        _k1_ele_pos.push_back(ElePosEntry {entry.item, i, entry.support, 0});
+    for (uint32_t i = 0; i < _global_fp_array.size(); ++i) {
+        const GlobalFPArrayEntry& entry = _global_fp_array[i];
+        auto& node_groups = _node_to_groups[entry.node];
+        auto [group_id, local_pos] = node_groups[i % node_groups.size()];
+
+        _local_k1_elepos_lists[group_id].push_back(ElePosEntry {entry.entry.item, local_pos, entry.entry.support, 0});
     }
 }
 
@@ -214,19 +260,12 @@ void FPTree::dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEn
     Timer::instance().stop();
 
     Timer::instance().start("Mine Freq Items - Postprocess");
-    // size_t total_candidates = 0;
-    // for (int i = 0; i < nr_of_dpus; ++i) {
-    //     total_candidates += candidate_cnts[i];
-    // }
-
-    // candidate_map.reserve(candidate_map.size() + total_candidates);
-
     for (int i = 0; i < nr_of_dpus; ++i) {
         for (int j = 0; j < candidate_cnts[i]; ++j) {
             const CandidateEntry& candidate = candidates[i][j];
             if (candidate.suffix_item == 0) continue; // Skip root item
             uint64_t key = (static_cast<uint64_t>(candidate.prefix_item) << 32) | candidate.suffix_item;
-
+            
             auto it = candidate_map.try_emplace(key, candidate);
             if (!it.second) {
                 it.first->second.add_candidate(candidate);
@@ -264,7 +303,7 @@ void FPTree::mine_frequent_itemsets() {
 
         std::vector<ElePosEntry> ele_pos = _k1_ele_pos;
         while (ele_pos.size() > 0) {
-            auto candidates = std::move(mine_candidates(system, ele_pos));
+            auto candidates = mine_candidates(system, ele_pos);
 
             Timer::instance().start("Mine Freq Items - Merge Results");
             std::vector<ElePosEntry> next_ele_pos;

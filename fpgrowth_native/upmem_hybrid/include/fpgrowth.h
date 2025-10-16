@@ -3,6 +3,8 @@
 
 #include <vector>
 #include <list>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "db.hpp"
 #include "common.h"
@@ -86,13 +88,20 @@ public:
     }
 
 private:
+    struct GlobalFPArrayEntry {
+        FPArrayEntry entry;
+        Node* node;
+    };
+
     Node* _root; // Root item number is 0
     Node* _leaf_head;
     Database* _db;
     int _min_support;
     std::vector<HeaderTableEntry> _header_table;
-    std::vector<FPArrayEntry> _fp_array;
-    std::vector<ElePosEntry> _k1_ele_pos;
+    std::vector<GlobalFPArrayEntry> _global_fp_array;
+    std::vector<std::vector<FPArrayEntry>> _local_fp_arrays; // FP Arrays for each DPU(or group)
+    std::vector<std::vector<ElePosEntry>> _local_k1_elepos_lists; // K=1 ElePos for each DPU(or group)
+    std::unordered_map<Node*, std::vector<std::pair<int, uint32_t>>> _node_to_groups; // Map node to groups containing it (group_id, local_pos)
     std::vector<std::pair<uint32_t, uint32_t>> _frequent_itemsets_1;
     std::vector<std::pair<uint32_t, uint32_t>> _frequent_itemsets_gt1;
     uint32_t _itemset_id = NR_DB_ITEMS;

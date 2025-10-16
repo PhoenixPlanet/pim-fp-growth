@@ -4,7 +4,6 @@
 #include <iostream>
 #include <filesystem>
 #include <string>
-#include <functional>
 
 #include "timer.h"
 
@@ -49,29 +48,11 @@ int main(int argc, char* argv[]) {
 
     // make output file
     std::ofstream output(output_file);
-
-    std::function<void(uint32_t)> get_prefix = [&output, &fp_tree, &get_prefix](uint32_t item) {
-        if (item < NR_DB_ITEMS) {
-            output << item << " ";
-        } else {
-            const auto& prefix = fp_tree.get_frequent_itemsets_gt1()[item - NR_DB_ITEMS];
-            get_prefix(prefix.first);
-            if (prefix.second != (uint32_t)-1)
-                output << prefix.second << " ";
-        }
-    };
-
     for (const auto& itemset : fp_tree.get_frequent_itemsets()) {
-        auto [first, second] = itemset;
-        if (first < NR_DB_ITEMS) {
-            output << first;
-            if (second != (uint32_t)-1)
-                output << " " << second;
-            output << std::endl;
-        } else {
-            get_prefix(first);
-            output << second << std::endl;
+        for (int item : itemset) {
+            output << item << " ";
         }
+        output << std::endl;
     }
 
     Timer::instance().print_records();

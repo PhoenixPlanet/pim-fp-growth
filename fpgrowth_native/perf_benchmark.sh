@@ -110,13 +110,13 @@ run_perf_benchmark() {
     if [ -f "$exe_path" ]; then
         if [ "$PERF_AVAILABLE" = true ]; then
             # Run with full perf stats
-            $PERF_CMD -e cycles,instructions,cache-references,cache-misses,branch-instructions,branch-misses,page-faults,context-switches,cpu-migrations,L1-dcache-loads,L1-dcache-load-misses,LLC-loads,LLC-load-misses,dTLB-loads,dTLB-load-misses -o "$perf_output" "$exe_path" "$input_file" "$min_support" > "$output_file" 2>&1
+            sudo LD_LIBRARY_PATH=$LD_LIBRARY_PATH $PERF_CMD -e cycles,instructions,cache-references,cache-misses,branch-instructions,branch-misses,page-faults,context-switches,cpu-migrations,L1-dcache-loads,L1-dcache-load-misses,LLC-loads,LLC-load-misses,dTLB-loads,dTLB-load-misses -o "$perf_output" "$exe_path" "$input_file" "$min_support" "$output_file"
             echo "✓ $exe_name completed - perf results saved to $perf_output"
         else
             # Fallback to basic timing
             echo "# Fallback timing benchmark for $exe_name" > "$perf_output"
             start_time=$(date +%s.%N)
-            "$exe_path" "$input_file" "$min_support" > "$output_file" 2>&1
+            "$exe_path" "$input_file" "$min_support" "$output_file"
             end_time=$(date +%s.%N)
             execution_time=$(echo "$end_time - $start_time" | bc -l)
             echo "     ${execution_time} seconds time elapsed" >> "$perf_output"
