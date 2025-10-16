@@ -90,11 +90,15 @@ public:
     std::unordered_map<uint64_t, TempCandidates> mine_candidates(const std::vector<ElePosEntry>& ele_pos);
     void delete_tree();
 
-    std::vector<std::vector<uint32_t>> get_frequent_itemsets() {
-        std::vector<std::vector<uint32_t>> frequent_itemsets(_frequent_itemsets_1.begin(), _frequent_itemsets_1.end());
+    std::vector<std::pair<uint32_t, uint32_t>> get_frequent_itemsets() {
+        std::vector<std::pair<uint32_t, uint32_t>> frequent_itemsets(_frequent_itemsets_1.begin(), _frequent_itemsets_1.end());
         frequent_itemsets.insert(frequent_itemsets.end(), _frequent_itemsets_gt1.begin(), _frequent_itemsets_gt1.end());
 
         return frequent_itemsets;
+    }
+
+    const std::vector<std::pair<uint32_t, uint32_t>>& get_frequent_itemsets_gt1() const {
+        return _frequent_itemsets_gt1;
     }
 
 private:
@@ -105,8 +109,8 @@ private:
     std::vector<HeaderTableEntry> _header_table;
     std::vector<FPArrayEntry> _fp_array;
     std::vector<ElePosEntry> _k1_ele_pos;
-    std::vector<std::vector<uint32_t>> _frequent_itemsets_1;
-    std::vector<std::vector<uint32_t>> _frequent_itemsets_gt1;
+    std::vector<std::pair<uint32_t, uint32_t>> _frequent_itemsets_1;
+    std::vector<std::pair<uint32_t, uint32_t>> _frequent_itemsets_gt1;
     uint32_t _itemset_id = NR_DB_ITEMS;
 
     void delete_tree(Node* node);

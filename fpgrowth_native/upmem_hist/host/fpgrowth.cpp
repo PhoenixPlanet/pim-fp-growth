@@ -36,27 +36,16 @@ void FPTree::build_tree() {
         _frequent_itemsets_1.push_back({static_cast<uint32_t>(item.first), -1});
     }
 
-    _header_table.clear();
-    for (const auto& item : frequent_items) {
-        HeaderTableEntry entry;
-        entry.item = item.first;
-        entry.frequency = item.second;
-        _header_table.push_back(entry);
-    }
-
     _db->seek_to_start();
     _leaf_head = nullptr;
     Timer::instance().stop();
 
     Timer::instance().start("Build FP-Tree - Filter & Sort");
-    std::deque<std::vector<int>> items_list = _db->filtered_items();
+    std::vector<std::vector<int>> items_list = _db->filtered_items();
     Timer::instance().stop();
 
     Timer::instance().start("Build FP-Tree");
-    while (items_list.size() > 0) {
-        std::vector<int> items = items_list.front();
-        items_list.pop_front();
-
+    for (const auto& items : items_list) {
         Node* current_node = _root;
         for (int item : items) {
             bool found = false;
@@ -68,10 +57,11 @@ void FPTree::build_tree() {
                     break;
                 }
             }
+
             if (!found) {
-                Node* new_node = new Node(item, 1, current_node);
+                Node* new_node = new Node(_node_cnt++, item, 1, current_node);
                 
-                if (current_node != _root && current_node->child.empty()) {
+                if (current_node->in_leaf_list) {
                     Node* prev = current_node->prev_leaf;
                     Node* next = current_node->next_leaf;
 
@@ -91,37 +81,29 @@ void FPTree::build_tree() {
 
                     current_node->next_leaf = nullptr;
                     current_node->prev_leaf = nullptr;
-                }
-
-                if (_leaf_head == nullptr) {
-                    _leaf_head = new_node;
-                    new_node->next_leaf = nullptr;
-                    new_node->prev_leaf = nullptr;
-                } else {
-                    new_node->prev_leaf = nullptr;
-                    new_node->next_leaf = _leaf_head;
-                    _leaf_head->prev_leaf = new_node;
-                    _leaf_head = new_node;
+                    current_node->in_leaf_list = false;
                 }
 
                 current_node->child.push_back(new_node);
-                current_node = current_node->child.back();
-                auto htb_entry = std::find_if(_header_table.begin(), _header_table.end(), [&item](const HeaderTableEntry& entry) {
-                    return entry.item == item;
-                });
-                if (htb_entry != _header_table.end()) {
-                    htb_entry->node_link.push_back(new_node);
-                } else {
-                    std::cerr << "Error: Item not found in header table: " << item << std::endl;
-                }
+                current_node = new_node;
             }
+        }
+
+        if (current_node != _root && !current_node->in_leaf_list && current_node->child.empty()) {
+            if (_leaf_head) {
+                _leaf_head->prev_leaf = current_node;
+            }
+            current_node->next_leaf = _leaf_head;
+            current_node->prev_leaf = nullptr;
+            current_node->in_leaf_list = true;
+            _leaf_head = current_node;
         }
     }
     Timer::instance().stop();
 }
 
 void FPTree::build_fp_array() {
-    std::map<Node*, int> item_idx_table;
+    std::vector<int> item_idx_table(_node_cnt, -1);
     _fp_array.clear();
 
     Node* target_leaf = _leaf_head;
@@ -133,13 +115,13 @@ void FPTree::build_fp_array() {
 
             Node* parent = current->parent;
             FPArrayEntry& last_entry = _fp_array.back();
-            if (item_idx_table.find(parent) != item_idx_table.end()) {
-                last_entry.parent_pos = item_idx_table[parent];
+            if (item_idx_table[parent->id] != -1) {
+                last_entry.parent_pos = item_idx_table[parent->id];
                 break;
             }
 
-            item_idx_table[parent] = _fp_array.size();
-            last_entry.parent_pos = item_idx_table[parent];
+            item_idx_table[parent->id] = _fp_array.size();
+            last_entry.parent_pos = item_idx_table[parent->id];
 
             _fp_array.push_back({parent->item, -1, parent->count, parent->depth});
             current = parent;

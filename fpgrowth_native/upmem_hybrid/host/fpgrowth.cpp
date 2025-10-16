@@ -5,6 +5,8 @@
 #include <functional>
 #include <unordered_map>
 #include <utility>
+#include <thread>
+#include <barrier>
 
 #include "param.h"
 #include "timer.h"
@@ -36,27 +38,16 @@ void FPTree::build_tree() {
         _frequent_itemsets_1.push_back({static_cast<uint32_t>(item.first), -1});
     }
 
-    _header_table.clear();
-    for (const auto& item : frequent_items) {
-        HeaderTableEntry entry;
-        entry.item = item.first;
-        entry.frequency = item.second;
-        _header_table.push_back(entry);
-    }
-
     _db->seek_to_start();
     _leaf_head = nullptr;
     Timer::instance().stop();
 
     Timer::instance().start("Build FP-Tree - Filter & Sort");
-    std::deque<std::vector<int>> items_list = _db->filtered_items();
+    std::vector<std::vector<int>> items_list = _db->filtered_items();
     Timer::instance().stop();
 
     Timer::instance().start("Build FP-Tree");
-    while (items_list.size() > 0) {
-        std::vector<int> items = items_list.front();
-        items_list.pop_front();
-
+    for (const auto& items : items_list) {
         Node* current_node = _root;
         for (int item : items) {
             bool found = false;
@@ -68,10 +59,11 @@ void FPTree::build_tree() {
                     break;
                 }
             }
+
             if (!found) {
-                Node* new_node = new Node(item, 1, current_node);
+                Node* new_node = new Node(_node_cnt++, item, 1, current_node);
                 
-                if (current_node != _root && current_node->child.empty()) {
+                if (current_node->in_leaf_list) {
                     Node* prev = current_node->prev_leaf;
                     Node* next = current_node->next_leaf;
 
@@ -91,42 +83,34 @@ void FPTree::build_tree() {
 
                     current_node->next_leaf = nullptr;
                     current_node->prev_leaf = nullptr;
-                }
-
-                if (_leaf_head == nullptr) {
-                    _leaf_head = new_node;
-                    new_node->next_leaf = nullptr;
-                    new_node->prev_leaf = nullptr;
-                } else {
-                    new_node->prev_leaf = nullptr;
-                    new_node->next_leaf = _leaf_head;
-                    _leaf_head->prev_leaf = new_node;
-                    _leaf_head = new_node;
+                    current_node->in_leaf_list = false;
                 }
 
                 current_node->child.push_back(new_node);
-                current_node = current_node->child.back();
-                auto htb_entry = std::find_if(_header_table.begin(), _header_table.end(), [&item](const HeaderTableEntry& entry) {
-                    return entry.item == item;
-                });
-                if (htb_entry != _header_table.end()) {
-                    htb_entry->node_link.push_back(new_node);
-                } else {
-                    std::cerr << "Error: Item not found in header table: " << item << std::endl;
-                }
+                current_node = new_node;
             }
+        }
+
+        if (current_node != _root && !current_node->in_leaf_list && current_node->child.empty()) {
+            if (_leaf_head) {
+                _leaf_head->prev_leaf = current_node;
+            }
+            current_node->next_leaf = _leaf_head;
+            current_node->prev_leaf = nullptr;
+            current_node->in_leaf_list = true;
+            _leaf_head = current_node;
         }
     }
     Timer::instance().stop();
 }
 
 void FPTree::build_fp_array() {
-    std::unordered_map<Node*, int> global_item_idx_table;
+    std::vector<int> global_item_idx_table(_node_cnt, -1);
     _global_fp_array.clear();
 
-    std::vector<std::unordered_map<Node*, int>> local_item_idx_tables(NR_GROUPS);
-    _local_fp_arrays.clear();
-    _local_fp_arrays.resize(NR_GROUPS);
+    std::vector<std::vector<int>> local_item_idx_tables(NR_GROUPS, std::vector<int>(_node_cnt, -1));
+
+    _node_to_groups.resize(_node_cnt, std::vector<std::pair<int, uint32_t>>());
 
     Node* target_leaf = _leaf_head;
     int idx = 0;
@@ -135,12 +119,12 @@ void FPTree::build_fp_array() {
         int group_id = idx % NR_GROUPS;
 
         std::vector<FPArrayEntry>& local_fp_array = _local_fp_arrays[group_id];
-        std::unordered_map<Node*, int>& local_item_idx_table = local_item_idx_tables[group_id];
+        std::vector<int>& local_item_idx_table = local_item_idx_tables[group_id];
 
         _global_fp_array.push_back(GlobalFPArrayEntry {FPArrayEntry {current->item, -1, current->count, current->depth}, current});
         local_fp_array.push_back(FPArrayEntry {current->item, -1, current->count, current->depth});
 
-        _node_to_groups[current].push_back({group_id, (int)local_fp_array.size() - 1});
+        _node_to_groups[current->id].push_back({group_id, (int)local_fp_array.size() - 1});
 
         bool global_finished = false;
         bool local_finished = false;
@@ -150,14 +134,14 @@ void FPTree::build_fp_array() {
 
             Node* parent = current->parent;
             FPArrayEntry& global_last_entry = _global_fp_array.back().entry;
-            if (global_item_idx_table.find(parent) != global_item_idx_table.end()) {
-                global_last_entry.parent_pos = global_item_idx_table[parent];
+            if (global_item_idx_table[parent->id] != -1) {
+                global_last_entry.parent_pos = global_item_idx_table[parent->id];
                 global_finished = true;
             }
 
             FPArrayEntry& local_last_entry = local_fp_array.back();
-            if (local_item_idx_table.find(parent) != local_item_idx_table.end()) {
-                local_last_entry.parent_pos = local_item_idx_table[parent];
+            if (local_item_idx_table[parent->id] != -1) {
+                local_last_entry.parent_pos = local_item_idx_table[parent->id];
                 local_finished = true;
             }
 
@@ -167,7 +151,7 @@ void FPTree::build_fp_array() {
 
             if (!global_finished) {
                 int global_pos = _global_fp_array.size();
-                global_item_idx_table[parent] = global_pos;
+                global_item_idx_table[parent->id] = global_pos;
                 global_last_entry.parent_pos = global_pos;
 
                 _global_fp_array.push_back(GlobalFPArrayEntry {FPArrayEntry {parent->item, -1, parent->count, parent->depth}, parent});
@@ -175,11 +159,11 @@ void FPTree::build_fp_array() {
 
             if (!local_finished) {
                 int local_pos = local_fp_array.size();
-                local_item_idx_table[parent] = local_pos;
+                local_item_idx_table[parent->id] = local_pos;
                 local_last_entry.parent_pos = local_pos;
 
                 local_fp_array.push_back(FPArrayEntry {parent->item, -1, parent->count, parent->depth});
-                _node_to_groups[parent].push_back({group_id, local_pos});
+                _node_to_groups[parent->id].push_back({group_id, local_pos});
             }
 
             current = parent;
@@ -191,28 +175,44 @@ void FPTree::build_fp_array() {
 
     //std::cout << "FP-Array has " << _fp_array.size() << " nodes." << std::endl;
     //std::cout << "FP-Array size: " << _fp_array.size() * sizeof(FPArrayEntry) / 1024.0 << " KB" << std::endl;
+    // for (GlobalFPArrayEntry& entry : _global_fp_array) {
+    //     std::cout << "Global FP-Array Entry: (" << entry.entry.item << ", " << entry.entry.parent_pos << ", " << entry.entry.support << ", " << entry.entry.depth << ")" << std::endl;
+    // }
+    // std::cout << std::endl;
+
+    for (int i = 0; i < NR_GROUPS; ++i) {
+        std::vector<FPArrayEntry>& local_fp_array = _local_fp_arrays[i];
+        std::cout << "Group " << i << " - FP-Array size: " << local_fp_array.size() * sizeof(FPArrayEntry) / 1024.0 << " KB" << std::endl;
+    }
+    std::cout << std::endl;
 }
 
 void FPTree::build_k1_ele_pos() {
-    _local_k1_elepos_lists.clear();
-    _local_k1_elepos_lists.resize(NR_GROUPS);
-
     for (uint32_t i = 0; i < _global_fp_array.size(); ++i) {
         const GlobalFPArrayEntry& entry = _global_fp_array[i];
-        auto& node_groups = _node_to_groups[entry.node];
+        auto& node_groups = _node_to_groups[entry.node->id];
         auto [group_id, local_pos] = node_groups[i % node_groups.size()];
 
-        _local_k1_elepos_lists[group_id].push_back(ElePosEntry {entry.entry.item, local_pos, entry.entry.support, 0});
+        _local_elepos_lists[group_id].push_back(ElePosEntry {entry.entry.item, local_pos, entry.entry.support, 0});
     }
+
+    // for (int i = 0; i < NR_GROUPS; ++i) {
+    //     std::cout << "Group " << i << " - K=1 ElePos size: " << _local_elepos_lists[i].size() * sizeof(ElePosEntry) / 1024.0 << " KB" << std::endl;
+    //     for (const auto& elepos : _local_elepos_lists[i]) {
+    //         std::cout << "Group " << i << " - K=1 ElePos: (" << elepos.item << ", " << elepos.pos << ", " << elepos.support << ")" << std::endl;
+    //     }
+    // }
+    // std::cout << std::endl;
 }
 
-void FPTree::dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEntry>& ele_pos, 
-                                 std::unordered_map<uint64_t, TempCandidates>& candidate_map) {
-    Timer::instance().start("Mine Freq Items - Preprocess");
+void FPTree::dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEntry>& ele_pos, int group_id) {
+    std::vector<FPArrayEntry>& fp_array = _local_fp_arrays[group_id];
+
+    Timer::local_instance(group_id).start("Mine Freq Items - Preprocess");
     int nr_of_dpus = system.dpus().size();
 
     // Distribute ElePos across DPUs
-    std::cout << "ElePos size: " << ele_pos.size() * sizeof(ElePosEntry) / 1024.0 << " KB, distributing across " << nr_of_dpus << " DPUs." << std::endl;
+    std::cout << "ElePos size: " << ele_pos.size() * sizeof(ElePosEntry) / 1024.0 << " KB, distributing across " << nr_of_dpus << " DPUs, Group ID" << group_id << std::endl;
     std::vector<std::vector<ElePosEntry>> distributed;
     int quotent = ele_pos.size() / nr_of_dpus;
     int remainder = ele_pos.size() % nr_of_dpus;
@@ -229,7 +229,7 @@ void FPTree::dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEn
         for (int j = 0; j < (int)distributed.back().size(); ++j) {
             distributed.back()[j].candidate_start_idx = candidate_start_idx;
             if (distributed.back()[j].item == 0) continue;
-            candidate_start_idx += _fp_array[distributed.back()[j].pos].depth - 1;
+            candidate_start_idx += fp_array[distributed.back()[j].pos].depth - 1;
         }
         candidate_cnts[i] = candidate_start_idx;
         max_candidates = std::max(max_candidates, candidate_start_idx);
@@ -243,92 +243,173 @@ void FPTree::dpu_mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEn
             distributed[i].resize(distributed[i].size() + padding, {0, 0, 0, 0}); // Pad with zeros
         }
     }
-    Timer::instance().stop();
+    Timer::local_instance(group_id).stop();
 
-    Timer::instance().start("Mine Freq Items - Transfer kElePos(To DPU)");
+    Timer::local_instance(group_id).start("Mine Freq Items - Transfer kElePos(To DPU)");
     system.copy("k_elepos_size", counts);
     system.copy(DPU_MRAM_HEAP_POINTER_NAME, MRAM_FP_ARRAY_SZ, distributed);
-    Timer::instance().stop();
+    Timer::local_instance(group_id).stop();
 
-    Timer::instance().start("Mine Freq Items - Exec");
+    Timer::local_instance(group_id).start("Mine Freq Items - Exec");
     system.exec();
-    Timer::instance().stop();
+    Timer::local_instance(group_id).stop();
 
-    Timer::instance().start("Mine Freq Items - Transfer Candidates(To CPU)");
+    Timer::local_instance(group_id).start("Mine Freq Items - Transfer Candidates(To CPU)");
     std::vector<std::vector<CandidateEntry>> candidates(nr_of_dpus, std::vector<CandidateEntry>(max_candidates));
     system.copy(candidates, DPU_MRAM_HEAP_POINTER_NAME, MRAM_FP_ARRAY_SZ + MRAM_FP_ELEPOS_SZ);
-    Timer::instance().stop();
+    Timer::local_instance(group_id).stop();
 
-    Timer::instance().start("Mine Freq Items - Postprocess");
+    Timer::local_instance(group_id).start("Mine Freq Items - Postprocess");
     for (int i = 0; i < nr_of_dpus; ++i) {
         for (int j = 0; j < candidate_cnts[i]; ++j) {
             const CandidateEntry& candidate = candidates[i][j];
             if (candidate.suffix_item == 0) continue; // Skip root item
             uint64_t key = (static_cast<uint64_t>(candidate.prefix_item) << 32) | candidate.suffix_item;
-            
-            auto it = candidate_map.try_emplace(key, candidate);
-            if (!it.second) {
-                it.first->second.add_candidate(candidate);
-            }
+            _global_candidate_map.insert_or_update(key, candidate, group_id);
         }
     }
-    Timer::instance().stop();
+    Timer::local_instance(group_id).stop();
 }
 
-std::unordered_map<uint64_t, TempCandidates> FPTree::mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEntry>& ele_pos) {
+void FPTree::mine_candidates(dpu::DpuSet& system, const std::vector<ElePosEntry>& ele_pos, int group_id) {
     int nr_of_dpus = system.dpus().size();
-    std::unordered_map<uint64_t, TempCandidates> candidate_map;
     
     int max_elepos = (MRAM_FP_ELEPOS_SZ / sizeof(ElePosEntry)) * nr_of_dpus;
     for (int partition = 0; partition < (int)ele_pos.size(); partition += max_elepos) {
         int end = std::min(static_cast<int>(ele_pos.size()), partition + max_elepos);
         std::vector<ElePosEntry> ele_pos_partition(ele_pos.begin() + partition, ele_pos.begin() + end);
 
-        dpu_mine_candidates(system, ele_pos_partition, candidate_map);
+        dpu_mine_candidates(system, ele_pos_partition, group_id);
     }
-
-    return candidate_map;
 }
 
-void FPTree::mine_frequent_itemsets() {
-    try {
-        dpu::DpuSet system = dpu::DpuSet::allocate(NR_DPUS, DPU_CONFIG);
-        Timer::instance().start("Mine Freq Items - DPU Load");
-        system.load(DPU_MINE_CANDIDATES);
-        Timer::instance().stop();
+void FPTree::allocate_dpus() {
+    uint32_t dpus_per_group = NR_DPUS / NR_GROUPS;
 
-        Timer::instance().start("Mine Freq Items - Transfer FP Array(To DPU)");
-        system.copy(DPU_MRAM_HEAP_POINTER_NAME, _fp_array);
-        Timer::instance().stop();
+    _dpu_systems.clear();
+    _dpu_systems.resize(NR_GROUPS);
 
-        std::vector<ElePosEntry> ele_pos = _k1_ele_pos;
-        while (ele_pos.size() > 0) {
-            auto candidates = mine_candidates(system, ele_pos);
+    _global_candidate_map.clear();
 
-            Timer::instance().start("Mine Freq Items - Merge Results");
-            std::vector<ElePosEntry> next_ele_pos;
-            for (const auto& [key, candidate_set] : candidates) {
-                if ((int)candidate_set.get_support() >= _min_support) {
-                    uint32_t prefix_item = candidate_set.get_prefix_item();
-                    _frequent_itemsets_gt1.push_back({prefix_item, candidate_set.get_suffix_item()});
-                    
-                    uint32_t itemset_id = _itemset_id++;
-                    for (const auto& candidate : candidate_set.candidates) {
-                        next_ele_pos.emplace_back(ElePosEntry {
+    _thread_running = true;
+
+    for (int group_id = 0; group_id < NR_GROUPS; ++group_id) {
+        _dpu_systems[group_id] = std::make_unique<DpuSetWrapper>(group_id, dpus_per_group);
+        _dpu_systems[group_id]->get().load(DPU_MINE_CANDIDATES);
+    }
+}
+
+template <class Completion>
+void FPTree::mine_freq_itemsets_worker(std::barrier<Completion>& sync, int group_id) {
+    dpu::DpuSet& system = _dpu_systems[group_id]->get();
+    Timer::local_instance(group_id).start("Mine Freq Items - Transfer FP-Array(To DPU)");
+    system.copy(DPU_MRAM_HEAP_POINTER_NAME, _local_fp_arrays[group_id]);
+    Timer::local_instance(group_id).stop();
+
+    while (true) {
+        if (_local_elepos_lists[group_id].size() > 0) {
+            mine_candidates(system, _local_elepos_lists[group_id], group_id);
+        }
+
+        sync.arrive_and_wait();
+
+        if (!_thread_running) break;
+    }
+}
+
+void FPTree::merge_candidates() {
+    Timer::instance2().start("Mine Freq Items - Merge Results");
+    for (auto& elepos_list: _local_elepos_lists) {
+        elepos_list.clear();
+    }
+
+    for (const auto& local_map : _global_candidate_map.get_maps()) {
+        for (const auto& [key, candidate_set] : local_map) {
+            if ((int)candidate_set.get_support() >= _min_support) {
+                uint32_t prefix_item = candidate_set.get_prefix_item();
+                _frequent_itemsets_gt1.push_back({prefix_item, candidate_set.get_suffix_item()});
+                
+                uint32_t itemset_id = _itemset_id++;
+                for (int i = 0; i < NR_GROUPS; ++i) {
+                    for (const auto& candidate : candidate_set.candidates[i]) {
+                        _local_elepos_lists[i].emplace_back(ElePosEntry {
                             itemset_id,
                             candidate.suffix_item_pos,
                             candidate.support,
                             0
                         });
+                        //std::cout << "Group " << i << " - New ElePos: (" << itemset_id << ", " << candidate.suffix_item_pos << ", " << candidate.support << ")" << std::endl;
                     }
                 }
             }
-            ele_pos.swap(next_ele_pos);
-            Timer::instance().stop();
         }
-    } catch (const dpu::DpuError& e) {
-        std::cerr << "DPU error: " << e.what() << std::endl;
     }
+    //std::cout << std::endl;
+
+    // for (const auto& [key, candidate_set] : _global_candidate_map.get_merged_map()) {
+    //     if ((int)candidate_set.get_support() >= _min_support) {
+    //         uint32_t prefix_item = candidate_set.get_prefix_item();
+    //         _frequent_itemsets_gt1.push_back({prefix_item, candidate_set.get_suffix_item()});
+            
+    //         uint32_t itemset_id = _itemset_id++;
+    //         for (int i = 0; i < NR_GROUPS; ++i) {
+    //             for (const auto& candidate : candidate_set.candidates[i]) {
+    //                 _local_elepos_lists[i].emplace_back(ElePosEntry {
+    //                     itemset_id,
+    //                     candidate.suffix_item_pos,
+    //                     candidate.support,
+    //                     0
+    //                 });
+    //                 //std::cout << "Group " << i << " - New ElePos: (" << itemset_id << ", " << candidate.suffix_item_pos << ", " << candidate.support << ")" << std::endl;
+    //             }
+    //         }
+    //     }
+    // }
+
+    bool all_empty = true;
+    for (const auto& elepos_list : _local_elepos_lists) {
+        if (!elepos_list.empty()) {
+            all_empty = false;
+            break;
+        }
+    }
+
+    if (all_empty) {
+        _thread_running = false;
+    }
+    // _thread_running = false;
+    Timer::instance2().stop();
+
+    // for (int i = 0; i < NR_GROUPS; ++i) {
+    //     std::cout << "Group " << i << " - K=1 ElePos size: " << _local_elepos_lists[i].size() * sizeof(ElePosEntry) / 1024.0 << " KB" << std::endl;
+    //     for (const auto& elepos : _local_elepos_lists[i]) {
+    //         std::cout << "Group " << i << " - K=1 ElePos: (" << elepos.item << ", " << elepos.pos << ", " << elepos.support << ")" << std::endl;
+    //     }
+    // }
+    // std::cout << std::endl;
+
+    _global_candidate_map.clear();
+}
+
+void FPTree::mine_frequent_itemsets() {
+    allocate_dpus();
+
+    std::barrier sync(NR_GROUPS, [this]() {
+        merge_candidates();
+    });
+
+    Timer::instance().start("Mine Freq Items - Total");
+    std::vector<std::thread> threads;
+    for (int group_id = 0; group_id < NR_GROUPS; ++group_id) {
+        threads.emplace_back([this, group_id, &sync]() {
+            mine_freq_itemsets_worker(sync, group_id);
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+    Timer::instance().stop();
 }
 
 void FPTree::delete_tree(Node* node) {

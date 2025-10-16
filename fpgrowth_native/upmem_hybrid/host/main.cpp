@@ -48,14 +48,39 @@ int main(int argc, char* argv[]) {
 
     // make output file
     std::ofstream output(output_file);
-    for (const auto& itemset : fp_tree.get_frequent_itemsets()) {
-        for (int item : itemset) {
+
+    std::function<void(uint32_t)> get_prefix = [&output, &fp_tree, &get_prefix](uint32_t item) {
+        if (item < NR_DB_ITEMS) {
             output << item << " ";
+        } else {
+            const auto& prefix = fp_tree.get_frequent_itemsets_gt1()[item - NR_DB_ITEMS];
+            get_prefix(prefix.first);
+            if (prefix.second != (uint32_t)-1)
+                output << prefix.second << " ";
         }
-        output << std::endl;
+    };
+
+    for (const auto& itemset : fp_tree.get_frequent_itemsets()) {
+        auto [first, second] = itemset;
+        if (first < NR_DB_ITEMS) {
+            output << first;
+            if (second != (uint32_t)-1)
+                output << " " << second;
+            output << std::endl;
+        } else {
+            get_prefix(first);
+            output << second << std::endl;
+        }
     }
 
     Timer::instance().print_records();
+    Timer::instance2().print_records();
+
+    for (int group_id = 0; group_id < NR_GROUPS; ++group_id) {
+        std::cout << "Group " << group_id << " Timers -----------------" << std::endl;
+        Timer::local_instance(group_id).print_records();
+    }
+    std::cout << std::endl;
 
     return 0;
 }

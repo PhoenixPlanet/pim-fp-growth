@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "include/param.h"
+#include "include/timer.h"
 
 void print_tree(Node* node, int depth = 0) {
     for (int i = 0; i < depth; ++i) std::cout << "  ";
@@ -26,14 +27,18 @@ void print_tree(Node* node, int depth = 0) {
 }
 
 void FPTree::build_tree() {
+    Timer::instance().start("Scan for freq items");
     std::vector<std::pair<int, int>> frequent_items = _db->scan_for_frequent_items(_min_support);
+    Timer::instance().stop();
+
+    Timer::instance().start("Build FP-Tree");
     std::sort(frequent_items.begin(), frequent_items.end(), [](const auto& a, const auto& b) {
         return a.second > b.second;
     });
 
     _frequent_itemsets_1.clear();
     for (const auto& item : frequent_items) {
-        _frequent_itemsets_1.push_back({static_cast<uint32_t>(item.first)});
+        _frequent_itemsets_1.push_back({static_cast<uint32_t>(item.first), -1});
     }
 
     _header_table.clear();
@@ -111,6 +116,7 @@ void FPTree::build_tree() {
             }
         }
     }
+    Timer::instance().stop();
 }
 
 void FPTree::build_fp_array() {
@@ -152,6 +158,7 @@ void FPTree::build_k1_ele_pos() {
 
 void FPTree::cpu_mine_candidates(const std::vector<ElePosEntry>& ele_pos, 
                                  std::unordered_map<uint64_t, TempCandidates>& candidate_map) {
+    Timer::instance().start("Mine Freq Items - Preprocess");
     // Distribute ElePos across Threads (Divide Ele Pos into chunks)
     std::vector<std::vector<ElePosEntry>> distributed;
     int quotent = ele_pos.size() / NR_THREADS;
@@ -183,7 +190,9 @@ void FPTree::cpu_mine_candidates(const std::vector<ElePosEntry>& ele_pos,
             distributed[i].resize(distributed[i].size() + padding, {0, 0, 0, 0}); // Pad with zeros
         }
     }
+    Timer::instance().stop();
 
+    Timer::instance().start("Mine Freq Items - Exec");
     std::thread threads[NR_THREADS];
     std::vector<std::vector<CandidateEntry>> candidates(NR_THREADS, std::vector<CandidateEntry>(max_candidates));
     for (int i = 0; i < NR_THREADS; ++i) {
@@ -192,7 +201,9 @@ void FPTree::cpu_mine_candidates(const std::vector<ElePosEntry>& ele_pos,
     for (int i = 0; i < NR_THREADS; ++i) {
         threads[i].join();
     }
+    Timer::instance().stop();
 
+    Timer::instance().start("Mine Freq Items - Postprocess");
     //Merge Candidates
     for (int i = 0; i < NR_THREADS; ++i) {
         for (int j = 0; j < candidate_cnts[i]; ++j) {
@@ -200,13 +211,13 @@ void FPTree::cpu_mine_candidates(const std::vector<ElePosEntry>& ele_pos,
             if (candidate.suffix_item == 0) continue; // Skip root item
             uint64_t key = (static_cast<uint64_t>(candidate.prefix_item) << 32) | candidate.suffix_item;
             
-            if (candidate_map.find(key) == candidate_map.end()) {
-                candidate_map[key] = TempCandidates(candidate);
-            } else {
-                candidate_map[key].add_candidate(candidate);
+            auto it = candidate_map.try_emplace(key, candidate);
+            if (!it.second) {
+                it.first->second.add_candidate(candidate);
             }
         }
     }
+    Timer::instance().stop();
 }
 
 std::unordered_map<uint64_t, TempCandidates> FPTree::mine_candidates(const std::vector<ElePosEntry>& ele_pos) {
@@ -224,35 +235,33 @@ std::unordered_map<uint64_t, TempCandidates> FPTree::mine_candidates(const std::
 }
 
 void FPTree::mine_frequent_itemsets() {
-     std::vector<ElePosEntry> ele_pos = _k1_ele_pos;
-        while (ele_pos.size() > 0) {
-            //Mine Candidate
-            auto candidates = std::move(mine_candidates(ele_pos));
-            std::vector<ElePosEntry> next_ele_pos;
-            for (const auto& [key, candidate_set] : candidates) {
-                if ((int)candidate_set.get_support() >= _min_support) {
-                    //Save K+1 Frequent Itemset
-                    if (candidate_set.get_prefix_item() < NR_DB_ITEMS) {
-                        _frequent_itemsets_gt1.push_back({candidate_set.get_prefix_item(), candidate_set.get_suffix_item()});
-                    } else {
-                        const auto& prefix = _frequent_itemsets_gt1[candidate_set.get_prefix_item() - NR_DB_ITEMS];
-                        std::vector<uint32_t> itemset(prefix.begin(), prefix.end());
-                        itemset.push_back(candidate_set.get_suffix_item());
-                        _frequent_itemsets_gt1.push_back(itemset);
-                    }
-                    //Create K+1 ElePos
-                    uint32_t itemset_id = _itemset_id++;
-                    for (const auto& candidate : candidate_set.candidates) {
-                        next_ele_pos.push_back(ElePosEntry {
-                            itemset_id,
-                            candidate.suffix_item_pos,
-                            candidate.support,
-                            0
-                        });
-                    }
+    std::vector<ElePosEntry> ele_pos = _k1_ele_pos;
+    while (ele_pos.size() > 0) {
+        //Mine Candidate
+        auto candidates = std::move(mine_candidates(ele_pos));
+
+        Timer::instance().start("Mine Freq Items - Merge Results");
+        std::vector<ElePosEntry> next_ele_pos;
+        for (const auto& [key, candidate_set] : candidates) {
+            if ((int)candidate_set.get_support() >= _min_support) {
+                //Save K+1 Frequent Itemset
+                uint32_t prefix_item = candidate_set.get_prefix_item();
+                _frequent_itemsets_gt1.push_back({prefix_item, candidate_set.get_suffix_item()});
+
+                //Create K+1 ElePos
+                uint32_t itemset_id = _itemset_id++;
+                for (const auto& candidate : candidate_set.candidates) {
+                    next_ele_pos.push_back(ElePosEntry {
+                        itemset_id,
+                        candidate.suffix_item_pos,
+                        candidate.support,
+                        0
+                    });
                 }
             }
-            ele_pos = std::move(next_ele_pos);
+        }
+        ele_pos.swap(next_ele_pos);
+        Timer::instance().stop();
     }
 }
 

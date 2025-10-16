@@ -25,7 +25,7 @@ public:
 
     void seek_to_start();
     std::vector<std::pair<int, int>> scan_for_frequent_items(int min_support);
-    std::deque<std::vector<int>> filtered_items();
+    std::vector<std::vector<int>> filtered_items();
 
 private:
     std::unordered_map<int, int> _item_priority = {};

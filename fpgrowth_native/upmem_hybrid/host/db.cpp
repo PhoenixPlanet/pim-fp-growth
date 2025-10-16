@@ -174,7 +174,7 @@ std::vector<std::pair<int, int>> Database::scan_for_frequent_items(int min_suppo
     return frequent_items;
 }
 
-std::deque<std::vector<int>> Database::filtered_items() {
+std::vector<std::vector<int>> Database::filtered_items() {
 /** Multithreaded version of filtered_items
     std::vector<std::deque<std::vector<int>>> all_results(NR_THREADS);
     std::vector<std::pair<std::streampos, std::streampos>> parts = divide_file(_file, NR_THREADS);
@@ -213,7 +213,7 @@ std::deque<std::vector<int>> Database::filtered_items() {
 */
 
     std::string line;
-    std::deque<std::vector<int>> results;
+    std::vector<std::vector<int>> results;
     while (std::getline(_file, line)) {
         std::istringstream iss(line);
         std::vector<int> items;

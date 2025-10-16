@@ -9,6 +9,7 @@
 #include "param.h"
 
 struct Node {
+    uint32_t id;
     uint32_t item;
     uint32_t count;
     Node* parent;
@@ -16,9 +17,10 @@ struct Node {
     std::list<Node*> child;
     Node* next_leaf;
     Node* prev_leaf;
+    bool in_leaf_list;
 
-    Node(uint32_t item, uint32_t count, Node* parent, uint32_t depth): item(item), count(count), parent(parent), depth(depth) {}
-    Node(uint32_t item, uint32_t count, Node* parent): Node(item, count, parent, parent ? parent->depth + 1 : 0) {}
+    Node(uint32_t id, uint32_t item, uint32_t count, Node* parent, uint32_t depth): id(id), item(item), count(count), parent(parent), depth(depth), in_leaf_list(false) {}
+    Node(uint32_t id, uint32_t item, uint32_t count, Node* parent): Node(id, item, count, parent, parent ? parent->depth + 1 : 0) {}
 };
 
 struct HeaderTableEntry {
@@ -62,8 +64,8 @@ public:
 
 class FPTree {
 public:
-    FPTree(int min_support, Database* db): _root(new Node(0, 0, nullptr, 0)), _db(db), _min_support(min_support) {}
-    FPTree(int min_support): _root(new Node(0, 0, nullptr, 0)), _db(nullptr), _min_support(min_support) {}
+    FPTree(int min_support, Database* db): _root(new Node(0, 0, 0, nullptr, 0)), _node_cnt(1), _db(db), _min_support(min_support) {}
+    FPTree(int min_support): _root(new Node(0, 0, 0, nullptr, 0)), _node_cnt(1), _db(nullptr), _min_support(min_support) {}
 
     void build_tree();
     void build_fp_array();
@@ -87,10 +89,10 @@ public:
 
 private:
     Node* _root; // Root item number is 0
+    uint32_t _node_cnt;
     Node* _leaf_head;
     Database* _db;
     int _min_support;
-    std::vector<HeaderTableEntry> _header_table;
     std::vector<FPArrayEntry> _fp_array;
     std::vector<ElePosEntry> _k1_ele_pos;
     std::vector<std::pair<uint32_t, uint32_t>> _frequent_itemsets_1;

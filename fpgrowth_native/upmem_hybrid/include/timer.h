@@ -8,7 +8,10 @@
 #include <optional>
 #include <stdexcept>
 #include <iostream>
+#include <array>
 #include <iomanip>
+
+#include "param.h"
 
 class Timer {
 public:
@@ -23,6 +26,25 @@ public:
     static Timer& instance() {
         static Timer timer_instance;
         return timer_instance;
+    }
+
+    static Timer& instance2() {
+        static Timer timer_instance;
+        return timer_instance;
+    }
+
+    static Timer& local_instance(int group_id) {
+        static std::array<std::unique_ptr<Timer>, NR_GROUPS> local_timers;
+        static bool initialized = false;
+        if (!initialized) {
+            for (int i = 0; i < NR_GROUPS; ++i) {
+                if (!local_timers[i]) {
+                    local_timers[i] = std::unique_ptr<Timer>(new Timer());
+                }
+            }
+            initialized = true;
+        }
+        return *local_timers[group_id];
     }
 
     void start(const std::string& name) {
@@ -72,6 +94,8 @@ private:
     ~Timer() = default;
     Timer(const Timer&) = delete;
     Timer& operator=(const Timer&) = delete;
+
+    friend struct std::default_delete<Timer>;
 
     bool running{false};
     std::optional<std::string> current_name;
